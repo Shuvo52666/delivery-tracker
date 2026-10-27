@@ -1,0 +1,3339 @@
+<!-- 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  />
+  <title>Mapbox Live Delivery Tracker</title>
+
+  <link
+    href="https://api.mapbox.com/mapbox-gl-js/v3.16.0/mapbox-gl.css"
+    rel="stylesheet"
+  />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.16.0/mapbox-gl.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      font-family: Arial, sans-serif;
+      background: #f4f7fb;
+      color: #1e293b;
+    }
+
+    .app {
+      display: flex;
+      width: 100%;
+      height: 100vh;
+      height: 100dvh;
+    }
+
+    .sidebar {
+      width: 340px;
+      flex-shrink: 0;
+      padding: 22px;
+      overflow-y: auto;
+      background: white;
+      border-right: 1px solid #e2e8f0;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+    }
+
+    .subtitle {
+      margin: 0 0 20px;
+      font-size: 13px;
+      color: #64748b;
+    }
+
+    .status {
+      padding: 13px;
+      margin-bottom: 14px;
+      border-radius: 8px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-size: 14px;
+    }
+
+    .error {
+      color: #b91c1c;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      margin: 23px 0 12px;
+      font-size: 12px;
+      letter-spacing: 1px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #64748b;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .stat {
+      padding: 15px 12px;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 22px;
+      margin-bottom: 6px;
+    }
+
+    .stat span {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    .progress-track {
+      height: 9px;
+      width: 100%;
+      border-radius: 20px;
+      background: #e2e8f0;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: #2563eb;
+      transition: width 0.3s;
+    }
+
+    .progress-label {
+      margin-top: 9px;
+      color: #64748b;
+      font-size: 13px;
+    }
+
+    .instruction {
+      padding: 15px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    button {
+      padding: 11px 15px;
+      border: 0;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      background: #2563eb;
+      color: white;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .secondary {
+      background: #e2e8f0;
+      color: #1e293b;
+    }
+
+    .danger {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: #64748b;
+      line-height: 1.6;
+    }
+
+    .map-area {
+      position: relative;
+      flex: 1;
+      min-width: 0;
+      background: #e7edf5;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    .map-overlay {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 2;
+      padding: 12px 16px;
+      background: #ffffffed;
+      border-radius: 10px;
+      box-shadow: 0 4px 15px #0002;
+      pointer-events: none;
+    }
+
+    .map-overlay strong {
+      display: block;
+      font-size: 15px;
+    }
+
+    .map-overlay span {
+      display: block;
+      margin-top: 4px;
+      color: #64748b;
+      font-size: 12px;
+    }
+
+    .map-tools {
+      position: absolute;
+      right: 15px;
+      bottom: 36px;
+      z-index: 2;
+    }
+
+    .map-tools button {
+      background: white;
+      color: #1e293b;
+      box-shadow: 0 3px 12px #0002;
+    }
+
+    .vehicle {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: #2563eb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 3px solid white;
+      box-shadow: 0 2px 12px #0005;
+      font-size: 17px;
+    }
+
+    .destination {
+      height: 21px;
+      width: 21px;
+      border-radius: 50%;
+      background: #dc2626;
+      border: 3px solid white;
+      box-shadow: 0 2px 10px #0005;
+    }
+
+    .start-marker {
+      height: 17px;
+      width: 17px;
+      border-radius: 50%;
+      background: #16a34a;
+      border: 3px solid white;
+      box-shadow: 0 2px 10px #0005;
+    }
+
+    @media (max-width: 760px) {
+      .app {
+        flex-direction: column-reverse;
+      }
+
+      .sidebar {
+        width: 100%;
+        height: 43%;
+        padding: 15px;
+        border-right: none;
+        border-top: 1px solid #e2e8f0;
+      }
+
+      .map-area {
+        flex: none;
+        height: 57%;
+      }
+
+      .map-overlay {
+        top: 10px;
+        left: 10px;
+        padding: 9px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <h1>Delivery Tracker</h1>
+      <p class="subtitle">
+        Mapbox + Socket.IO + OSRM
+      </p>
+
+      <div class="status" id="status">
+        Connecting to server...
+      </div>
+
+      <div class="error" id="error"></div>
+
+      <div class="section-title">
+        Delivery Information
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <strong id="distance">--</strong>
+          <span>Remaining distance</span>
+        </div>
+
+        <div class="stat">
+          <strong id="eta">--</strong>
+          <span>Estimated time</span>
+        </div>
+
+        <div class="stat">
+          <strong id="speed">--</strong>
+          <span>Simulation speed</span>
+        </div>
+
+        <div class="stat">
+          <strong id="progress">0%</strong>
+          <span>Completed</span>
+        </div>
+      </div>
+
+      <div class="section-title">
+        Delivery Progress
+      </div>
+
+      <div class="progress-track">
+        <div
+          class="progress-fill"
+          id="progressBar"
+        ></div>
+      </div>
+
+      <p class="progress-label" id="progressLabel">
+        Waiting for route...
+      </p>
+
+      <div class="section-title">
+        Next Direction
+      </div>
+
+      <div class="instruction" id="instruction">
+        Preparing route...
+      </div>
+
+      <div class="section-title">
+        Simulation Controls
+      </div>
+
+      <div class="buttons">
+        <button id="startBtn">▶ Start</button>
+        <button id="pauseBtn" class="secondary">
+          ⏸ Pause
+        </button>
+        <button id="resetBtn" class="danger">
+          ↻ Reset
+        </button>
+      </div>
+
+      <div class="section-title">
+        Route Source
+      </div>
+
+      <div class="instruction" id="routeSource">
+        Loading route...
+      </div>
+
+      <p class="hint">
+        Click anywhere on the map to choose a new
+        delivery destination.
+      </p>
+
+      <p class="hint">
+        Simulation speed is fixed at 24 km/h.
+        This is not real-time traffic data or
+        a physical vehicle's GPS position.
+      </p>
+    </aside>
+
+    <main class="map-area">
+      <div id="map"></div>
+
+      <div class="map-overlay">
+        <strong>Live Delivery Map</strong>
+        <span>Mapbox Streets V12</span>
+      </div>
+
+      <div class="map-tools">
+        <button id="followBtn">
+          ◎ Follow Vehicle
+        </button>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // Public Mapbox token
+    mapboxgl.accessToken =
+      "pk.eyJ1Ijoic2h1dm84MTU0IiwiYSI6ImNtdm52MHl6dDBpdDYzNXF4aWJlMTlha2YifQ.z1NPpmqnSb6TV4cYSNaqtA";
+
+    const $ = (id) => document.getElementById(id);
+
+    const map = new mapboxgl.Map({
+      container: "map",
+      style: "mapbox://styles/mapbox/standard",
+      center: [90.3760, 23.7465],
+      zoom: 14,
+      maxZoom: 20,
+      pitch: 0,
+      bearing: 0,
+    });
+
+    map.addControl(
+      new mapboxgl.NavigationControl(),
+      "top-right"
+    );
+
+    const socket = io();
+
+    let mapReady = false;
+    let state = null;
+    let vehicleMarker = null;
+    let startMarker = null;
+    let destinationMarker = null;
+    let previousRouteKey = "";
+    let followVehicle = true;
+    let routeLoading = false;
+    let actionLoading = false;
+
+    const emptyLine = {
+      type: "Feature",
+      geometry: {
+        type: "LineString",
+        coordinates: [],
+      },
+      properties: {},
+    };
+
+    function toLngLat(point) {
+      return [point[1], point[0]];
+    }
+
+    function lineFeature(points) {
+      return {
+        type: "Feature",
+        properties: {},
+        geometry: {
+          type: "LineString",
+          coordinates: points.map(toLngLat),
+        },
+      };
+    }
+
+    function formatDistance(meters) {
+      if (!Number.isFinite(meters)) return "--";
+
+      return meters >= 1000
+        ? (meters / 1000).toFixed(2) + " km"
+        : Math.round(meters) + " m";
+    }
+
+    function formatETA(seconds) {
+      if (!Number.isFinite(seconds)) return "--";
+
+      const minutes = Math.ceil(seconds / 60);
+
+      if (minutes < 60) {
+        return `${minutes} min`;
+      }
+
+      const hours = Math.floor(minutes / 60);
+      const rest = minutes % 60;
+
+      return `${hours}h ${rest}m`;
+    }
+
+    function createMarker(className, point, popupText) {
+      const element = document.createElement("div");
+      element.className = className;
+
+      if (className === "vehicle") {
+        element.textContent = "🚚";
+      }
+
+      return new mapboxgl.Marker({
+        element,
+        anchor: "center",
+      })
+        .setLngLat(toLngLat(point))
+        .setPopup(
+          new mapboxgl.Popup({
+            offset: 20,
+          }).setText(popupText)
+        )
+        .addTo(map);
+    }
+
+    function drawRoute() {
+      if (!mapReady || !state?.ready) return;
+
+      if (!Array.isArray(state.route)) return;
+
+      map.getSource("full-route")?.setData(
+        lineFeature(state.route)
+      );
+
+      map.getSource("completed-route")?.setData(
+        lineFeature(state.path || [])
+      );
+
+      const current = state.position;
+
+      if (current) {
+        if (!vehicleMarker) {
+          vehicleMarker = createMarker(
+            "vehicle",
+            current,
+            "Delivery vehicle"
+          );
+        } else {
+          vehicleMarker.setLngLat(
+            toLngLat(current)
+          );
+        }
+      }
+
+      if (state.start) {
+        if (!startMarker) {
+          startMarker = createMarker(
+            "start-marker",
+            state.start,
+            "Delivery start"
+          );
+        } else {
+          startMarker.setLngLat(
+            toLngLat(state.start)
+          );
+        }
+      }
+
+      if (state.destination) {
+        if (!destinationMarker) {
+          destinationMarker = createMarker(
+            "destination",
+            state.destination,
+            "Customer destination"
+          );
+        } else {
+          destinationMarker.setLngLat(
+            toLngLat(state.destination)
+          );
+        }
+      }
+
+      // Only fit the map when the route changes.
+      const routeKey = JSON.stringify([
+        state.start,
+        state.destination,
+        state.totalMeters,
+        state.routeSource,
+      ]);
+
+      if (
+        routeKey !== previousRouteKey &&
+        state.route.length > 1
+      ) {
+        previousRouteKey = routeKey;
+
+        const bounds = new mapboxgl.LngLatBounds();
+
+        state.route.forEach((point) => {
+          bounds.extend(toLngLat(point));
+        });
+
+        map.fitBounds(bounds, {
+          padding: 65,
+          duration: 900,
+          maxZoom: 17,
+        });
+      } else if (
+        followVehicle &&
+        state.running &&
+        current
+      ) {
+        map.easeTo({
+          center: toLngLat(current),
+          duration: 450,
+        });
+      }
+    }
+
+    function updateDashboard() {
+      if (!state?.ready) {
+        $("status").textContent =
+          "Waiting for route calculation...";
+
+        $("startBtn").disabled = true;
+        $("pauseBtn").disabled = true;
+        $("resetBtn").disabled = true;
+        return;
+      }
+
+      $("status").textContent = state.delivered
+        ? "✓ Delivery completed"
+        : state.running
+        ? "● Delivery in progress"
+        : "● Delivery paused / ready";
+
+      $("distance").textContent =
+        formatDistance(state.remainingMeters);
+
+      $("eta").textContent =
+        formatETA(state.etaSeconds);
+
+      $("speed").textContent =
+        `${state.speedKmh} km/h`;
+
+      $("progress").textContent =
+        `${state.progress}%`;
+
+      $("progressBar").style.width =
+        `${state.progress}%`;
+
+      $("progressLabel").textContent =
+        `${state.progress}% completed · ` +
+        `${formatDistance(state.totalMeters)} total route`;
+
+      $("instruction").textContent =
+        state.delivered
+          ? "You have reached the destination."
+          : state.nextStep?.text ||
+            "Continue along the road.";
+
+      $("routeSource").textContent =
+        state.routeSource;
+
+      $("startBtn").disabled =
+        state.running || routeLoading || actionLoading;
+
+      $("pauseBtn").disabled =
+        !state.running || routeLoading || actionLoading;
+
+      $("resetBtn").disabled =
+        routeLoading || actionLoading;
+    }
+
+    function updateState(nextState) {
+      if (!nextState) return;
+
+      state = nextState;
+      updateDashboard();
+      drawRoute();
+    }
+
+    async function postAction(action) {
+      if (actionLoading || routeLoading) return;
+
+      actionLoading = true;
+      $("error").textContent = "";
+      updateDashboard();
+
+      try {
+        const response = await fetch(
+          `/api/${action}`,
+          {
+            method: "POST",
+          }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            result.error || "Action failed"
+          );
+        }
+
+        updateState(result);
+      } catch (error) {
+        $("error").textContent = error.message;
+      } finally {
+        actionLoading = false;
+        updateDashboard();
+      }
+    }
+
+    async function changeDestination(lngLat) {
+      if (routeLoading) return;
+
+      const destination = [
+        lngLat.lat,
+        lngLat.lng,
+      ];
+
+      routeLoading = true;
+
+      $("error").textContent = "";
+      $("status").textContent =
+        "Calculating new road route...";
+
+      updateDashboard();
+
+      try {
+        const response = await fetch("/api/route", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            destination,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            result.error || "Route calculation failed"
+          );
+        }
+
+        updateState(result);
+      } catch (error) {
+        $("error").textContent =
+          `Could not calculate route: ${error.message}`;
+      } finally {
+        routeLoading = false;
+        updateDashboard();
+      }
+    }
+
+    // Start/Pause/Reset buttons
+    $("startBtn").addEventListener("click", () => {
+      postAction("start");
+    });
+
+    $("pauseBtn").addEventListener("click", () => {
+      postAction("pause");
+    });
+
+    $("resetBtn").addEventListener("click", () => {
+      postAction("reset");
+    });
+
+    $("followBtn").addEventListener("click", () => {
+      followVehicle = !followVehicle;
+
+      $("followBtn").textContent = followVehicle
+        ? "◎ Following Vehicle"
+        : "◎ Follow Vehicle";
+
+      if (followVehicle && state?.position) {
+        map.flyTo({
+          center: toLngLat(state.position),
+          zoom: Math.max(map.getZoom(), 16),
+        });
+      }
+    });
+
+    // Configure route layers after Mapbox loads.
+    map.on("load", () => {
+      mapReady = true;
+
+      map.addSource("full-route", {
+        type: "geojson",
+        data: emptyLine,
+      });
+
+      map.addSource("completed-route", {
+        type: "geojson",
+        data: emptyLine,
+      });
+//full-route-line
+map.addLayer({
+  id: "full-route-line",
+  type: "line",
+  source: "full-route",
+  layout: {
+    "line-join": "round",
+    "line-cap": "round",
+  },
+  paint: {
+    "line-color": "#2563EB",
+    "line-width": 7,
+    "line-opacity": 0.95,
+  },
+});
+// Completed route — Black
+map.addLayer({
+  id: "completed-route-line",
+  type: "line",
+  source: "completed-route",
+  layout: {
+    "line-join": "round",
+    "line-cap": "round",
+  },
+  paint: {
+    "line-color": "#000000",
+    "line-width": 7,
+    "line-opacity": 1,
+  },
+});
+
+      drawRoute();
+      map.resize();
+    });
+
+    // Clicking on the map selects a new destination.
+    map.on("click", (event) => {
+      if (routeLoading) return;
+
+      const confirmed = window.confirm(
+        "Set this point as the new delivery destination?"
+      );
+
+      if (confirmed) {
+        changeDestination(event.lngLat);
+      }
+    });
+
+    map.on("error", (event) => {
+      console.error("Mapbox error:", event.error);
+    });
+
+    // Socket.IO realtime events.
+    socket.on("connect", () => {
+      console.log("Socket.IO connected");
+    });
+
+    socket.on("disconnect", () => {
+      $("status").textContent =
+        "Disconnected from delivery server";
+    });
+
+    socket.on("init", updateState);
+    socket.on("location", updateState);
+
+    // Recover the latest state after refresh/reconnection.
+    async function loadInitialState() {
+      try {
+        const response = await fetch("/api/state");
+
+        if (!response.ok) {
+          throw new Error("Could not load initial state");
+        }
+
+        updateState(await response.json());
+      } catch (error) {
+        $("error").textContent = error.message;
+      }
+    }
+
+    loadInitialState();
+  </script>
+</body>
+</html> -->
+
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  />
+  <title>Mapbox Live Delivery Tracker</title>
+
+  <link
+    href="https://api.mapbox.com/mapbox-gl-js/v3.16.0/mapbox-gl.css"
+    rel="stylesheet"
+  />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.16.0/mapbox-gl.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      font-family: Arial, sans-serif;
+      background: #f4f7fb;
+      color: #1e293b;
+    }
+
+    .app {
+      display: flex;
+      width: 100%;
+      height: 100vh;
+      height: 100dvh;
+    }
+
+    .sidebar {
+      width: 340px;
+      flex-shrink: 0;
+      padding: 22px;
+      overflow-y: auto;
+      background: white;
+      border-right: 1px solid #e2e8f0;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+    }
+
+    .subtitle {
+      margin: 0 0 20px;
+      font-size: 13px;
+      color: #64748b;
+    }
+
+    .status {
+      padding: 13px;
+      margin-bottom: 14px;
+      border-radius: 8px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-size: 14px;
+    }
+
+    .error {
+      color: #b91c1c;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      margin: 23px 0 12px;
+      font-size: 12px;
+      letter-spacing: 1px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #64748b;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .stat {
+      padding: 15px 12px;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 22px;
+      margin-bottom: 6px;
+    }
+
+    .stat span {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    .progress-track {
+      height: 9px;
+      width: 100%;
+      border-radius: 20px;
+      background: #e2e8f0;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: #2563eb;
+      transition: width 0.3s;
+    }
+
+    .progress-label {
+      margin-top: 9px;
+      color: #64748b;
+      font-size: 13px;
+    }
+
+    .instruction {
+      padding: 15px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    button {
+      padding: 11px 15px;
+      border: 0;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      background: #2563eb;
+      color: white;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .secondary {
+      background: #e2e8f0;
+      color: #1e293b;
+    }
+
+    .danger {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: #64748b;
+      line-height: 1.6;
+    }
+
+    .map-area {
+      position: relative;
+      flex: 1;
+      min-width: 0;
+      background: #e7edf5;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    .map-overlay {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 2;
+      padding: 12px 16px;
+      background: #ffffffed;
+      border-radius: 10px;
+      box-shadow: 0 4px 15px #0002;
+      pointer-events: none;
+    }
+
+    .map-overlay strong {
+      display: block;
+      font-size: 15px;
+    }
+
+    .map-overlay span {
+      display: block;
+      margin-top: 4px;
+      color: #64748b;
+      font-size: 12px;
+    }
+
+    .map-tools {
+      position: absolute;
+      right: 15px;
+      bottom: 36px;
+      z-index: 2;
+    }
+
+    .map-tools button {
+      background: white;
+      color: #1e293b;
+      box-shadow: 0 3px 12px #0002;
+    }
+
+    .vehicle {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: #2563eb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 3px solid white;
+      box-shadow: 0 2px 12px #0005;
+      font-size: 17px;
+    }
+
+    .destination {
+      height: 21px;
+      width: 21px;
+      border-radius: 50%;
+      background: #dc2626;
+      border: 3px solid white;
+      box-shadow: 0 2px 10px #0005;
+    }
+
+    .start-marker {
+      height: 17px;
+      width: 17px;
+      border-radius: 50%;
+      background: #16a34a;
+      border: 3px solid white;
+      box-shadow: 0 2px 10px #0005;
+    }
+
+    @media (max-width: 760px) {
+      .app {
+        flex-direction: column-reverse;
+      }
+
+      .sidebar {
+        width: 100%;
+        height: 43%;
+        padding: 15px;
+        border-right: none;
+        border-top: 1px solid #e2e8f0;
+      }
+
+      .map-area {
+        flex: none;
+        height: 57%;
+      }
+
+      .map-overlay {
+        top: 10px;
+        left: 10px;
+        padding: 9px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+
+    <aside class="sidebar">
+
+      <h1>Delivery Tracker</h1>
+
+      <p class="subtitle">
+        Mapbox + Socket.IO + OSRM
+      </p>
+
+      <div class="status" id="status">
+        Connecting to server...
+      </div>
+
+      <div class="error" id="error"></div>
+
+      <div class="section-title">
+        Delivery Information
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <strong id="distance">--</strong>
+          <span>Remaining distance</span>
+        </div>
+
+        <div class="stat">
+          <strong id="eta">--</strong>
+          <span>Estimated time</span>
+        </div>
+
+        <div class="stat">
+          <strong id="speed">--</strong>
+          <span>Simulation speed</span>
+        </div>
+
+        <div class="stat">
+          <strong id="progress">0%</strong>
+          <span>Completed</span>
+        </div>
+      </div>
+
+      <div class="section-title">
+        Delivery Progress
+      </div>
+
+      <div class="progress-track">
+        <div
+          class="progress-fill"
+          id="progressBar"
+        ></div>
+      </div>
+
+      <p class="progress-label" id="progressLabel">
+        Waiting for route...
+      </p>
+
+      <div class="section-title">
+        Next Direction
+      </div>
+
+      <div class="instruction" id="instruction">
+        Preparing route...
+      </div>
+
+      <div class="section-title">
+        Simulation Controls
+      </div>
+
+      <div class="buttons">
+        <button id="startBtn">▶ Start</button>
+
+        <button id="pauseBtn" class="secondary">
+          ⏸ Pause
+        </button>
+
+        <button id="resetBtn" class="danger">
+          ↻ Reset
+        </button>
+      </div>
+
+      <div class="section-title">
+        Route Source
+      </div>
+
+      <div class="instruction" id="routeSource">
+        Loading route...
+      </div>
+
+      <p class="hint">
+        Click anywhere on the map to choose a new
+        delivery destination.
+      </p>
+
+      <p class="hint">
+        Simulation speed is fixed at 24 km/h.
+        This is not real-time traffic data or
+        a physical vehicle's GPS position.
+      </p>
+
+    </aside>
+
+    <main class="map-area">
+
+      <div id="map"></div>
+
+      <div class="map-overlay">
+        <strong>Live Delivery Map</strong>
+        <span>Mapbox Streets V12</span>
+      </div>
+
+      <div class="map-tools">
+        <button id="followBtn">
+          ◎ Follow Vehicle
+        </button>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    // =========================================
+    // MAPBOX CONFIGURATION
+    // =========================================
+
+    mapboxgl.accessToken =
+      "pk.eyJ1Ijoic2h1dm84MTU0IiwiYSI6ImNtdm52MHl6dDBpdDYzNXF4aWJlMTlha2YifQ.z1NPpmqnSb6TV4cYSNaqtA";
+
+    const $ = (id) => document.getElementById(id);
+
+    const map = new mapboxgl.Map({
+      container: "map",
+      style: "mapbox://styles/mapbox/standard",
+      center: [90.3760, 23.7465],
+      zoom: 14,
+      maxZoom: 20,
+      pitch: 0,
+      bearing: 0,
+    });
+
+    map.addControl(
+      new mapboxgl.NavigationControl(),
+      "top-right"
+    );
+
+    const socket = io();
+
+    let mapReady = false;
+    let state = null;
+
+    let vehicleMarker = null;
+    let startMarker = null;
+    let destinationMarker = null;
+
+    let previousRouteKey = "";
+    let followVehicle = true;
+    let routeLoading = false;
+    let actionLoading = false;
+
+    const DEFAULT_DESTINATION = [23.7582, 90.3930];
+    let selectedDestination = [...DEFAULT_DESTINATION];
+
+    // =========================================
+    // GET CURRENT GPS LOCATION
+    // =========================================
+
+    function getCurrentLocation() {
+      return new Promise((resolve, reject) => {
+
+        if (!navigator.geolocation) {
+          reject(
+            new Error(
+              "Geolocation is not supported by this browser"
+            )
+          );
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            resolve([
+              position.coords.latitude,
+              position.coords.longitude
+            ]);
+          },
+
+          (error) => {
+            let message = "Could not get your location";
+
+            if (error.code === 1) {
+              message = "Allow location access to start the route";
+            } else if (error.code === 2) {
+              message = "Your location is unavailable";
+            } else if (error.code === 3) {
+              message = "Location request timed out";
+            }
+
+            reject(new Error(message));
+          },
+
+          {
+            enableHighAccuracy: true,
+            timeout: 20000,
+            maximumAge: 0
+          }
+        );
+      });
+    }
+
+    // =========================================
+    // GEOJSON HELPERS
+    // =========================================
+
+    const emptyLine = {
+      type: "Feature",
+      geometry: {
+        type: "LineString",
+        coordinates: [],
+      },
+      properties: {},
+    };
+
+    function toLngLat(point) {
+      return [point[1], point[0]];
+    }
+
+    function lineFeature(points) {
+      return {
+        type: "Feature",
+        properties: {},
+        geometry: {
+          type: "LineString",
+          coordinates: points.map(toLngLat),
+        },
+      };
+    }
+
+    // =========================================
+    // FORMAT DATA
+    // =========================================
+
+    function formatDistance(meters) {
+      if (!Number.isFinite(meters)) return "--";
+
+      return meters >= 1000
+        ? (meters / 1000).toFixed(2) + " km"
+        : Math.round(meters) + " m";
+    }
+
+    function formatETA(seconds) {
+      if (!Number.isFinite(seconds)) return "--";
+
+      const minutes = Math.ceil(seconds / 60);
+
+      if (minutes < 60) {
+        return `${minutes} min`;
+      }
+
+      const hours = Math.floor(minutes / 60);
+      const rest = minutes % 60;
+
+      return `${hours}h ${rest}m`;
+    }
+
+    // =========================================
+    // MAP MARKERS
+    // =========================================
+
+    function createMarker(className, point, popupText) {
+      const element = document.createElement("div");
+      element.className = className;
+
+      if (className === "vehicle") {
+        element.textContent = "🚚";
+      }
+
+      return new mapboxgl.Marker({
+        element,
+        anchor: "center",
+      })
+        .setLngLat(toLngLat(point))
+        .setPopup(
+          new mapboxgl.Popup({
+            offset: 20,
+          }).setText(popupText)
+        )
+        .addTo(map);
+    }
+
+    // =========================================
+    // DRAW ROUTE
+    // =========================================
+
+    function drawRoute() {
+      if (!mapReady || !state?.ready) return;
+      if (!Array.isArray(state.route)) return;
+
+      map.getSource("full-route")?.setData(
+        lineFeature(state.route)
+      );
+
+      map.getSource("completed-route")?.setData(
+        lineFeature(state.path || [])
+      );
+
+      const current = state.position;
+
+      if (current) {
+        if (!vehicleMarker) {
+          vehicleMarker = createMarker(
+            "vehicle",
+            current,
+            "Delivery vehicle"
+          );
+        } else {
+          vehicleMarker.setLngLat(
+            toLngLat(current)
+          );
+        }
+      }
+
+      if (state.start) {
+        if (!startMarker) {
+          startMarker = createMarker(
+            "start-marker",
+            state.start,
+            "Delivery start"
+          );
+        } else {
+          startMarker.setLngLat(
+            toLngLat(state.start)
+          );
+        }
+      }
+
+      if (state.destination) {
+        if (!destinationMarker) {
+          destinationMarker = createMarker(
+            "destination",
+            state.destination,
+            "Customer destination"
+          );
+        } else {
+          destinationMarker.setLngLat(
+            toLngLat(state.destination)
+          );
+        }
+      }
+
+      // Only fit the map when the route changes.
+      const routeKey = JSON.stringify([
+        state.start,
+        state.destination,
+        state.totalMeters,
+        state.routeSource,
+      ]);
+
+      if (
+        routeKey !== previousRouteKey &&
+        state.route.length > 1
+      ) {
+        previousRouteKey = routeKey;
+
+        const bounds = new mapboxgl.LngLatBounds();
+
+        state.route.forEach((point) => {
+          bounds.extend(toLngLat(point));
+        });
+
+        map.fitBounds(bounds, {
+          padding: 65,
+          duration: 900,
+          maxZoom: 17,
+        });
+
+      } else if (
+        followVehicle &&
+        state.running &&
+        current
+      ) {
+        map.easeTo({
+          center: toLngLat(current),
+          duration: 450,
+        });
+      }
+    }
+
+    // =========================================
+    // UPDATE DASHBOARD
+    // =========================================
+
+    function updateDashboard() {
+      if (!state?.ready) {
+        $("status").textContent =
+          "Waiting for route calculation...";
+
+        $("startBtn").disabled = true;
+        $("pauseBtn").disabled = true;
+        $("resetBtn").disabled = true;
+        return;
+      }
+
+      $("status").textContent = state.delivered
+        ? "✓ Delivery completed"
+        : state.running
+        ? "● Delivery in progress"
+        : "● Delivery paused / ready";
+
+      $("distance").textContent =
+        formatDistance(state.remainingMeters);
+
+      $("eta").textContent =
+        formatETA(state.etaSeconds);
+
+      $("speed").textContent =
+        `${state.speedKmh} km/h`;
+
+      $("progress").textContent =
+        `${state.progress}%`;
+
+      $("progressBar").style.width =
+        `${state.progress}%`;
+
+      $("progressLabel").textContent =
+        `${state.progress}% completed · ` +
+        `${formatDistance(state.totalMeters)} total route`;
+
+      $("instruction").textContent =
+        state.delivered
+          ? "You have reached the destination."
+          : state.nextStep?.text ||
+            "Continue along the road.";
+
+      $("routeSource").textContent =
+        state.routeSource;
+
+      $("startBtn").disabled =
+        state.running || routeLoading || actionLoading;
+
+      $("pauseBtn").disabled =
+        !state.running || routeLoading || actionLoading;
+
+      $("resetBtn").disabled =
+        routeLoading || actionLoading;
+    }
+
+    function updateState(nextState) {
+      if (!nextState) return;
+
+      state = nextState;
+      updateDashboard();
+      drawRoute();
+    }
+
+    // =========================================
+    // START / PAUSE / RESET
+    // =========================================
+
+    async function postAction(action) {
+      if (actionLoading || routeLoading) return;
+
+      actionLoading = true;
+      $("error").textContent = "";
+      updateDashboard();
+
+      try {
+        const response = await fetch(
+          `/api/${action}`,
+          {
+            method: "POST",
+          }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            result.error || "Action failed"
+          );
+        }
+
+        updateState(result);
+
+      } catch (error) {
+        $("error").textContent = error.message;
+
+      } finally {
+        actionLoading = false;
+        updateDashboard();
+      }
+    }
+
+    // =========================================
+    // CALCULATE ROUTE FROM CURRENT GPS
+    // =========================================
+
+    async function calculateGpsRoute(destination) {
+      if (routeLoading) return;
+
+      routeLoading = true;
+
+      $("error").textContent = "";
+      $("status").textContent =
+        "Getting your GPS location...";
+
+      updateDashboard();
+
+      try {
+        // Get real browser location.
+        const source = await getCurrentLocation();
+
+        $("status").textContent =
+          "Calculating road route...";
+
+        // Move the map to your detected location.
+        map.flyTo({
+          center: toLngLat(source),
+          zoom: 15
+        });
+
+        // Send GPS source and destination to Node.js.
+        const response = await fetch("/api/route", {
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json"
+          },
+
+          body: JSON.stringify({
+            source,
+            destination
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            result.error || "Route calculation failed"
+          );
+        }
+
+        selectedDestination = [...destination];
+
+        updateState(result);
+
+      } catch (error) {
+        $("error").textContent =
+          `Could not calculate route: ${error.message}`;
+
+        console.error(error);
+
+      } finally {
+        routeLoading = false;
+        updateDashboard();
+      }
+    }
+
+    // =========================================
+    // CHANGE DESTINATION
+    // =========================================
+
+    async function changeDestination(lngLat) {
+      const destination = [
+        lngLat.lat,
+        lngLat.lng
+      ];
+
+      await calculateGpsRoute(destination);
+    }
+
+    // =========================================
+    // CONTROL BUTTONS
+    // =========================================
+
+    $("startBtn").addEventListener("click", () => {
+      postAction("start");
+    });
+
+    $("pauseBtn").addEventListener("click", () => {
+      postAction("pause");
+    });
+
+    $("resetBtn").addEventListener("click", () => {
+      postAction("reset");
+    });
+
+    $("followBtn").addEventListener("click", () => {
+      followVehicle = !followVehicle;
+
+      $("followBtn").textContent = followVehicle
+        ? "◎ Following Vehicle"
+        : "◎ Follow Vehicle";
+
+      if (followVehicle && state?.position) {
+        map.flyTo({
+          center: toLngLat(state.position),
+          zoom: Math.max(map.getZoom(), 16),
+        });
+      }
+    });
+
+    // =========================================
+    // MAPBOX ROUTE LAYERS
+    // =========================================
+
+    map.on("load", () => {
+      mapReady = true;
+
+      map.addSource("full-route", {
+        type: "geojson",
+        data: emptyLine,
+      });
+
+      map.addSource("completed-route", {
+        type: "geojson",
+        data: emptyLine,
+      });
+
+      // Original blue route.
+      map.addLayer({
+        id: "full-route-line",
+        type: "line",
+        source: "full-route",
+
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+
+        paint: {
+          "line-color": "#2563EB",
+          "line-width": 7,
+          "line-opacity": 0.95,
+        },
+      });
+
+      // Completed route — Black.
+      map.addLayer({
+        id: "completed-route-line",
+        type: "line",
+        source: "completed-route",
+
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+
+        paint: {
+          "line-color": "#000000",
+          "line-width": 7,
+          "line-opacity": 1,
+        },
+      });
+
+      drawRoute();
+      map.resize();
+    });
+
+    // =========================================
+    // CLICK MAP TO SELECT DESTINATION
+    // =========================================
+
+    map.on("click", (event) => {
+      if (routeLoading) return;
+
+      const confirmed = window.confirm(
+        "Set this point as the new delivery destination?"
+      );
+
+      if (confirmed) {
+        changeDestination(event.lngLat);
+      }
+    });
+
+    map.on("error", (event) => {
+      console.error("Mapbox error:", event.error);
+    });
+
+    // =========================================
+    // SOCKET.IO
+    // =========================================
+
+    socket.on("connect", () => {
+      console.log("Socket.IO connected");
+    });
+
+    socket.on("disconnect", () => {
+      $("status").textContent =
+        "Disconnected from delivery server";
+    });
+
+    socket.on("init", updateState);
+    socket.on("location", updateState);
+
+    // =========================================
+    // INITIAL PAGE LOAD
+    // =========================================
+
+    async function loadInitialState() {
+      try {
+        const response = await fetch("/api/state");
+
+        if (!response.ok) {
+          throw new Error("Could not load initial state");
+        }
+
+        updateState(await response.json());
+
+      } catch (error) {
+        $("error").textContent = error.message;
+      }
+    }
+
+    // Automatically get GPS and initialize route.
+    loadInitialState().finally(() => {
+      calculateGpsRoute(selectedDestination);
+    });
+
+  </script>
+</body>
+</html> -->
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  />
+  <title>Mapbox Live Delivery Tracker</title>
+
+  <link
+    href="https://api.mapbox.com/mapbox-gl-js/v3.16.0/mapbox-gl.css"
+    rel="stylesheet"
+  />
+
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.16.0/mapbox-gl.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      font-family: Arial, sans-serif;
+      background: #f4f7fb;
+      color: #1e293b;
+    }
+
+    .app {
+      display: flex;
+      width: 100%;
+      height: 100vh;
+      height: 100dvh;
+    }
+
+    .sidebar {
+      width: 340px;
+      flex-shrink: 0;
+      padding: 22px;
+      overflow-y: auto;
+      background: white;
+      border-right: 1px solid #e2e8f0;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+    }
+
+    .subtitle {
+      margin: 0 0 20px;
+      font-size: 13px;
+      color: #64748b;
+    }
+
+    .status {
+      padding: 13px;
+      margin-bottom: 14px;
+      border-radius: 8px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-size: 14px;
+    }
+
+    .error {
+      color: #b91c1c;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      margin: 23px 0 12px;
+      font-size: 12px;
+      letter-spacing: 1px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #64748b;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .stat {
+      padding: 15px 12px;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 22px;
+      margin-bottom: 6px;
+    }
+
+    .stat span {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    .progress-track {
+      height: 9px;
+      width: 100%;
+      border-radius: 20px;
+      background: #e2e8f0;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: #2563eb;
+      transition: width 0.3s;
+    }
+
+    .progress-label {
+      margin-top: 9px;
+      color: #64748b;
+      font-size: 13px;
+    }
+
+    .instruction {
+      padding: 15px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    button {
+      padding: 11px 15px;
+      border: 0;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      background: #2563eb;
+      color: white;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .secondary {
+      background: #e2e8f0;
+      color: #1e293b;
+    }
+
+    .danger {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: #64748b;
+      line-height: 1.6;
+    }
+
+    .map-area {
+      position: relative;
+      flex: 1;
+      min-width: 0;
+      background: #e7edf5;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    .map-overlay {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 2;
+      padding: 12px 16px;
+      background: #ffffffed;
+      border-radius: 10px;
+      box-shadow: 0 4px 15px #0002;
+      pointer-events: none;
+    }
+
+    .map-overlay strong {
+      display: block;
+      font-size: 15px;
+    }
+
+    .map-overlay span {
+      display: block;
+      margin-top: 4px;
+      color: #64748b;
+      font-size: 12px;
+    }
+
+    .map-tools {
+      position: absolute;
+      right: 15px;
+      bottom: 36px;
+      z-index: 2;
+    }
+
+    .map-tools button {
+      background: white;
+      color: #1e293b;
+      box-shadow: 0 3px 12px #0002;
+    }
+
+    .vehicle {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: #2563eb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 3px solid white;
+      box-shadow: 0 2px 12px #0005;
+      font-size: 17px;
+    }
+
+    .destination {
+      height: 21px;
+      width: 21px;
+      border-radius: 50%;
+      background: #dc2626;
+      border: 3px solid white;
+      box-shadow: 0 2px 10px #0005;
+    }
+
+    .start-marker {
+      height: 17px;
+      width: 17px;
+      border-radius: 50%;
+      background: #16a34a;
+      border: 3px solid white;
+      box-shadow: 0 2px 10px #0005;
+    }
+
+    /* New fields only. Original styling unchanged. */
+
+    .location-input {
+      width: 100%;
+      padding: 11px;
+      margin-top: 7px;
+      margin-bottom: 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #1e293b;
+      background: white;
+      outline: none;
+    }
+
+    .location-input:focus {
+      border-color: #2563eb;
+    }
+
+    .location-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #334155;
+    }
+
+    .route-button {
+      width: 100%;
+      margin-top: 12px;
+    }
+
+    /* Screenshot-style exact location marker */
+
+    .exact-location {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #fff;
+      border: 4px solid #292929;
+      box-shadow: 0 0 0 10px rgba(130,155,255,0.20);
+    }
+
+    @media (max-width: 760px) {
+      .app {
+        flex-direction: column-reverse;
+      }
+
+      .sidebar {
+        width: 100%;
+        height: 43%;
+        padding: 15px;
+        border-right: none;
+        border-top: 1px solid #e2e8f0;
+      }
+
+      .map-area {
+        flex: none;
+        height: 57%;
+      }
+
+      .map-overlay {
+        top: 10px;
+        left: 10px;
+        padding: 9px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+
+    <aside class="sidebar">
+
+      <h1>Delivery Tracker</h1>
+
+      <p class="subtitle">
+        Mapbox + Socket.IO + OSRM
+      </p>
+
+      <div class="status" id="status">
+        Connecting to server...
+      </div>
+
+      <div class="error" id="error"></div>
+
+      <!-- SOURCE AND DESTINATION -->
+
+      <div class="section-title">
+        Source & Destination
+      </div>
+
+      <div class="instruction">
+
+        <label class="location-label" for="sourceInput">
+          Source Location
+        </label>
+
+        <input
+          id="sourceInput"
+          class="location-input"
+          type="text"
+          placeholder="Enter source address or coordinates"
+          autocomplete="off"
+        />
+
+        <button id="myLocationBtn" type="button">
+          ◎ My Location
+        </button>
+
+        <label
+          class="location-label"
+          for="destinationInput"
+          style="display:block;margin-top:18px;"
+        >
+          Destination Location
+        </label>
+
+        <input
+          id="destinationInput"
+          class="location-input"
+          type="text"
+          placeholder="Enter destination address or coordinates"
+          autocomplete="off"
+        />
+
+        <button
+          id="findRouteBtn"
+          class="route-button"
+          type="button"
+        >
+          Find Road Route
+        </button>
+
+        <p class="hint">
+          Enter an address or latitude, longitude.
+          You can also click the map to choose a destination.
+        </p>
+
+      </div>
+
+      <!-- ORIGINAL INFORMATION -->
+
+      <div class="section-title">
+        Delivery Information
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <strong id="distance">--</strong>
+          <span>Remaining distance</span>
+        </div>
+
+        <div class="stat">
+          <strong id="eta">--</strong>
+          <span>Estimated time</span>
+        </div>
+
+        <div class="stat">
+          <strong id="speed">--</strong>
+          <span>Simulation speed</span>
+        </div>
+
+        <div class="stat">
+          <strong id="progress">0%</strong>
+          <span>Completed</span>
+        </div>
+      </div>
+
+      <div class="section-title">
+        Delivery Progress
+      </div>
+
+      <div class="progress-track">
+        <div
+          class="progress-fill"
+          id="progressBar"
+        ></div>
+      </div>
+
+      <p class="progress-label" id="progressLabel">
+        Waiting for route...
+      </p>
+
+      <div class="section-title">
+        Next Direction
+      </div>
+
+      <div class="instruction" id="instruction">
+        Preparing route...
+      </div>
+
+      <div class="section-title">
+        Simulation Controls
+      </div>
+
+      <div class="buttons">
+        <button id="startBtn">▶ Start</button>
+
+        <button id="pauseBtn" class="secondary">
+          ⏸ Pause
+        </button>
+
+        <button id="resetBtn" class="danger">
+          ↻ Reset
+        </button>
+      </div>
+
+      <div class="section-title">
+        Route Source
+      </div>
+
+      <div class="instruction" id="routeSource">
+        Loading route...
+      </div>
+
+      <p class="hint">
+        Click anywhere on the map to choose a new
+        delivery destination.
+      </p>
+
+      <p class="hint">
+        Simulation speed is fixed at 24 km/h.
+        This is not real-time traffic data or
+        a physical vehicle's GPS position.
+      </p>
+
+    </aside>
+
+    <main class="map-area">
+
+      <div id="map"></div>
+
+      <div class="map-overlay">
+        <strong>Live Delivery Map</strong>
+        <span>Mapbox Streets V12</span>
+      </div>
+
+      <div class="map-tools">
+        <button id="followBtn">
+          ◎ Follow Vehicle
+        </button>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    // =========================================
+    // MAPBOX
+    // =========================================
+
+    mapboxgl.accessToken =
+      "pk.eyJ1Ijoic2h1dm84MTU0IiwiYSI6ImNtdm52MHl6dDBpdDYzNXF4aWJlMTlha2YifQ.z1NPpmqnSb6TV4cYSNaqtA";
+
+    const $ = (id) => document.getElementById(id);
+
+    const map = new mapboxgl.Map({
+      container: "map",
+      style: "mapbox://styles/mapbox/standard",
+      center: [90.3760, 23.7465],
+      zoom: 14,
+      maxZoom: 20,
+      pitch: 0,
+      bearing: 0,
+    });
+
+    map.addControl(
+      new mapboxgl.NavigationControl(),
+      "top-right"
+    );
+
+    const socket = io();
+
+    let mapReady = false;
+    let state = null;
+
+    let vehicleMarker = null;
+    let startMarker = null;
+    let destinationMarker = null;
+
+    // Exact coordinates are shown separately
+    // from the OSRM road-snapped coordinates.
+    let exactSourceMarker = null;
+    let exactDestinationMarker = null;
+
+    let previousRouteKey = "";
+    let followVehicle = true;
+    let routeLoading = false;
+    let actionLoading = false;
+
+    const DEFAULT_DESTINATION = [23.7582, 90.3930];
+    let selectedDestination = [...DEFAULT_DESTINATION];
+    let currentGPS = null;
+
+    // =========================================
+    // GET GPS
+    // =========================================
+
+    function getCurrentLocation() {
+      return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error("Geolocation is not supported"));
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            resolve([
+              position.coords.latitude,
+              position.coords.longitude
+            ]);
+          },
+
+          (error) => {
+            let message = "Unable to determine location";
+
+            if (error.code === 1) {
+              message = "Location permission denied";
+            } else if (error.code === 2) {
+              message = "Location unavailable";
+            } else if (error.code === 3) {
+              message = "Location request timed out";
+            }
+
+            reject(new Error(message));
+          },
+
+          {
+            enableHighAccuracy: true,
+            timeout: 20000,
+            maximumAge: 0
+          }
+        );
+      });
+    }
+
+    // =========================================
+    // COORDINATES
+    // =========================================
+
+    function toLngLat(point) {
+      return [point[1], point[0]];
+    }
+
+    function formatCoords(point) {
+      return (
+        point[0].toFixed(6) +
+        ", " +
+        point[1].toFixed(6)
+      );
+    }
+
+    function parseCoordinates(text) {
+      const parts = text.split(",").map(
+        (value) => value.trim()
+      );
+
+      if (
+        parts.length !== 2 ||
+        parts.some((value) => value === "")
+      ) {
+        return null;
+      }
+
+      const numbers = parts.map(Number);
+
+      if (
+        numbers.every(Number.isFinite) &&
+        numbers[0] >= -90 &&
+        numbers[0] <= 90 &&
+        numbers[1] >= -180 &&
+        numbers[1] <= 180
+      ) {
+        return numbers;
+      }
+
+      return null;
+    }
+
+    // =========================================
+    // SEARCH LOCATION BY ADDRESS
+    // =========================================
+
+    async function searchLocation(query) {
+      const url =
+        "https://api.mapbox.com/geocoding/v5/mapbox.places/" +
+        encodeURIComponent(query) +
+        ".json?limit=1&access_token=" +
+        encodeURIComponent(mapboxgl.accessToken);
+
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error("Mapbox location search failed");
+      }
+
+      const data = await response.json();
+
+      if (!data.features?.length) {
+        throw new Error("Location not found: " + query);
+      }
+
+      const [lng, lat] = data.features[0].center;
+
+      return [lat, lng];
+    }
+
+    async function resolveLocation(text) {
+      const value = text.trim();
+
+      if (!value) {
+        throw new Error("Location cannot be empty");
+      }
+
+      const coordinates = parseCoordinates(value);
+
+      if (coordinates) {
+        return coordinates;
+      }
+
+      return searchLocation(value);
+    }
+
+    // =========================================
+    // GEOJSON HELPERS
+    // =========================================
+
+    const emptyLine = {
+      type: "Feature",
+      geometry: {
+        type: "LineString",
+        coordinates: [],
+      },
+      properties: {},
+    };
+
+    function lineFeature(points) {
+      return {
+        type: "Feature",
+        properties: {},
+        geometry: {
+          type: "LineString",
+          coordinates: points.map(toLngLat),
+        },
+      };
+    }
+
+    // =========================================
+    // FORMATTING
+    // =========================================
+
+    function formatDistance(meters) {
+      if (!Number.isFinite(meters)) return "--";
+
+      return meters >= 1000
+        ? (meters / 1000).toFixed(2) + " km"
+        : Math.round(meters) + " m";
+    }
+
+    function formatETA(seconds) {
+      if (!Number.isFinite(seconds)) return "--";
+
+      const minutes = Math.ceil(seconds / 60);
+
+      if (minutes < 60) return `${minutes} min`;
+
+      const hours = Math.floor(minutes / 60);
+      const rest = minutes % 60;
+
+      return `${hours}h ${rest}m`;
+    }
+
+    // =========================================
+    // ORIGINAL MARKERS
+    // =========================================
+
+    function createMarker(className, point, popupText) {
+      const element = document.createElement("div");
+      element.className = className;
+
+      if (className === "vehicle") {
+        element.textContent = "🚚";
+      }
+
+      return new mapboxgl.Marker({
+        element,
+        anchor: "center",
+      })
+        .setLngLat(toLngLat(point))
+        .setPopup(
+          new mapboxgl.Popup({
+            offset: 20,
+          }).setText(popupText)
+        )
+        .addTo(map);
+    }
+
+    // =========================================
+    // EXACT SOURCE AND DESTINATION MARKERS
+    // =========================================
+
+    function createExactMarker(point, label) {
+      const element = document.createElement("div");
+      element.className = "exact-location";
+
+      return new mapboxgl.Marker({
+        element,
+        anchor: "center",
+      })
+        .setLngLat(toLngLat(point))
+        .setPopup(
+          new mapboxgl.Popup({
+            offset: 20
+          }).setText(label)
+        )
+        .addTo(map);
+    }
+
+    // =========================================
+    // DRAW DASHED CONNECTORS
+    // =========================================
+
+    function drawExactConnectors() {
+      if (!mapReady || !state?.ready) return;
+
+      const exactSource = state.exactSource;
+      const exactDestination = state.exactDestination;
+
+      // Exact source circle and dashed line.
+      if (exactSource && state.start) {
+        if (!exactSourceMarker) {
+          exactSourceMarker = createExactMarker(
+            exactSource,
+            "Exact source location"
+          );
+        } else {
+          exactSourceMarker.setLngLat(
+            toLngLat(exactSource)
+          );
+        }
+
+        map.getSource("source-connector")?.setData(
+          lineFeature([
+            exactSource,
+            state.start
+          ])
+        );
+      } else {
+        exactSourceMarker?.remove();
+        exactSourceMarker = null;
+
+        map.getSource("source-connector")?.setData(
+          emptyLine
+        );
+      }
+
+      // Exact destination circle and dashed line.
+      if (exactDestination && state.destination) {
+        if (!exactDestinationMarker) {
+          exactDestinationMarker = createExactMarker(
+            exactDestination,
+            "Exact destination location"
+          );
+        } else {
+          exactDestinationMarker.setLngLat(
+            toLngLat(exactDestination)
+          );
+        }
+
+        map.getSource("destination-connector")?.setData(
+          lineFeature([
+            state.destination,
+            exactDestination
+          ])
+        );
+      } else {
+        exactDestinationMarker?.remove();
+        exactDestinationMarker = null;
+
+        map.getSource("destination-connector")?.setData(
+          emptyLine
+        );
+      }
+    }
+
+    // =========================================
+    // DRAW ROAD ROUTE
+    // =========================================
+
+    function drawRoute() {
+      if (!mapReady || !state?.ready) return;
+      if (!Array.isArray(state.route)) return;
+
+      map.getSource("full-route")?.setData(
+        lineFeature(state.route)
+      );
+
+      map.getSource("completed-route")?.setData(
+        lineFeature(state.path || [])
+      );
+
+      const current = state.position;
+
+      if (current) {
+        if (!vehicleMarker) {
+          vehicleMarker = createMarker(
+            "vehicle",
+            current,
+            "Delivery vehicle"
+          );
+        } else {
+          vehicleMarker.setLngLat(toLngLat(current));
+        }
+      }
+
+      if (state.start) {
+        if (!startMarker) {
+          startMarker = createMarker(
+            "start-marker",
+            state.start,
+            "Road route start"
+          );
+        } else {
+          startMarker.setLngLat(toLngLat(state.start));
+        }
+      }
+
+      if (state.destination) {
+        if (!destinationMarker) {
+          destinationMarker = createMarker(
+            "destination",
+            state.destination,
+            "Road route destination"
+          );
+        } else {
+          destinationMarker.setLngLat(
+            toLngLat(state.destination)
+          );
+        }
+      }
+
+      // Draw the GPS-to-road dashed lines.
+      drawExactConnectors();
+
+      // Only fit map when route changes.
+      const routeKey = JSON.stringify([
+        state.start,
+        state.destination,
+        state.exactSource,
+        state.exactDestination,
+        state.totalMeters,
+        state.routeSource,
+      ]);
+
+      if (
+        routeKey !== previousRouteKey &&
+        state.route.length > 1
+      ) {
+        previousRouteKey = routeKey;
+
+        const bounds = new mapboxgl.LngLatBounds();
+
+        state.route.forEach((point) => {
+          bounds.extend(toLngLat(point));
+        });
+
+        if (state.exactSource) {
+          bounds.extend(toLngLat(state.exactSource));
+        }
+
+        if (state.exactDestination) {
+          bounds.extend(toLngLat(state.exactDestination));
+        }
+
+        map.fitBounds(bounds, {
+          padding: 65,
+          duration: 900,
+          maxZoom: 17,
+        });
+
+      } else if (
+        followVehicle &&
+        state.running &&
+        current
+      ) {
+        map.easeTo({
+          center: toLngLat(current),
+          duration: 450,
+        });
+      }
+    }
+
+    // =========================================
+    // UPDATE DASHBOARD
+    // =========================================
+
+    function updateDashboard() {
+      if (!state?.ready) {
+        $("status").textContent =
+          routeLoading
+            ? "Calculating road route..."
+            : "Waiting for route calculation...";
+
+        $("startBtn").disabled = true;
+        $("pauseBtn").disabled = true;
+        $("resetBtn").disabled = true;
+        return;
+      }
+
+      $("status").textContent = state.delivered
+        ? "✓ Delivery completed"
+        : state.running
+        ? "● Delivery in progress"
+        : "● Delivery paused / ready";
+
+      $("distance").textContent =
+        formatDistance(state.remainingMeters);
+
+      $("eta").textContent =
+        formatETA(state.etaSeconds);
+
+      $("speed").textContent =
+        `${state.speedKmh} km/h`;
+
+      $("progress").textContent =
+        `${state.progress}%`;
+
+      $("progressBar").style.width =
+        `${state.progress}%`;
+
+      $("progressLabel").textContent =
+        `${state.progress}% completed · ` +
+        `${formatDistance(state.totalMeters)} total route`;
+
+      $("instruction").textContent =
+        state.delivered
+          ? "You have reached the destination."
+          : state.nextStep?.text ||
+            "Continue along the road.";
+
+      $("routeSource").textContent =
+        state.routeSource;
+
+      $("startBtn").disabled =
+        state.running || routeLoading || actionLoading;
+
+      $("pauseBtn").disabled =
+        !state.running || routeLoading || actionLoading;
+
+      $("resetBtn").disabled =
+        routeLoading || actionLoading;
+    }
+
+    function updateState(nextState) {
+      if (!nextState) return;
+
+      state = nextState;
+      updateDashboard();
+      drawRoute();
+    }
+
+    // =========================================
+    // START / PAUSE / RESET
+    // =========================================
+
+    async function postAction(action) {
+      if (actionLoading || routeLoading) return;
+
+      actionLoading = true;
+      $("error").textContent = "";
+      updateDashboard();
+
+      try {
+        const response = await fetch(
+          `/api/${action}`,
+          { method: "POST" }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || "Action failed");
+        }
+
+        updateState(result);
+
+      } catch (error) {
+        $("error").textContent = error.message;
+      } finally {
+        actionLoading = false;
+        updateDashboard();
+      }
+    }
+
+    // =========================================
+    // ROAD ROUTE REQUEST
+    // =========================================
+
+    async function requestRoadRoute(source, destination) {
+      const response = await fetch("/api/route", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          source,
+          destination
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.error || "Route calculation failed"
+        );
+      }
+
+      return result;
+    }
+
+    // =========================================
+    // MY LOCATION BUTTON
+    // =========================================
+
+    async function useMyLocation() {
+      const button = $("myLocationBtn");
+
+      button.disabled = true;
+      button.textContent = "Locating...";
+      $("error").textContent = "";
+
+      try {
+        const coords = await getCurrentLocation();
+
+        currentGPS = coords;
+        $("sourceInput").value = formatCoords(coords);
+
+        map.flyTo({
+          center: toLngLat(coords),
+          zoom: 17
+        });
+
+        $("status").textContent =
+          "Location detected. Click Find Road Route.";
+
+      } catch (error) {
+        $("error").textContent = error.message;
+      } finally {
+        button.disabled = false;
+        button.textContent = "◎ My Location";
+      }
+    }
+
+    // =========================================
+    // FIND ROUTE FROM TYPED ADDRESSES
+    // =========================================
+
+    async function findTypedRoute() {
+      if (routeLoading || actionLoading) return;
+
+      routeLoading = true;
+      $("findRouteBtn").disabled = true;
+      $("error").textContent = "";
+
+      updateDashboard();
+
+      try {
+        const sourceText =
+          $("sourceInput").value.trim();
+
+        const destinationText =
+          $("destinationInput").value.trim();
+
+        if (!destinationText) {
+          throw new Error("Enter a destination");
+        }
+
+        let source;
+
+        if (
+          !sourceText ||
+          sourceText.toLowerCase() ===
+            "my current location"
+        ) {
+          source = await getCurrentLocation();
+          currentGPS = source;
+        } else {
+          source = await resolveLocation(sourceText);
+        }
+
+        const destination =
+          await resolveLocation(destinationText);
+
+        const result = await requestRoadRoute(
+          source,
+          destination
+        );
+
+        selectedDestination = [...destination];
+
+        $("sourceInput").value = formatCoords(source);
+        $("destinationInput").value =
+          formatCoords(destination);
+
+        updateState(result);
+
+      } catch (error) {
+        $("error").textContent =
+          "Could not calculate route: " +
+          error.message;
+      } finally {
+        routeLoading = false;
+        $("findRouteBtn").disabled = false;
+        updateDashboard();
+      }
+    }
+
+    // =========================================
+    // AUTOMATIC GPS START
+    // =========================================
+
+    async function calculateGpsRoute(destination) {
+      if (routeLoading) return;
+
+      routeLoading = true;
+      $("findRouteBtn").disabled = true;
+
+      $("error").textContent = "";
+
+      updateDashboard();
+
+      try {
+        const source = await getCurrentLocation();
+
+        currentGPS = source;
+
+        $("sourceInput").value =
+          formatCoords(source);
+
+        map.flyTo({
+          center: toLngLat(source),
+          zoom: 15
+        });
+
+        const result = await requestRoadRoute(
+          source,
+          destination
+        );
+
+        selectedDestination = [...destination];
+
+        $("destinationInput").value =
+          formatCoords(destination);
+
+        updateState(result);
+
+      } catch (error) {
+        $("error").textContent =
+          "Could not calculate route: " +
+          error.message;
+      } finally {
+        routeLoading = false;
+        $("findRouteBtn").disabled = false;
+        updateDashboard();
+      }
+    }
+
+    // =========================================
+    // CLICK MAP TO CHANGE DESTINATION
+    // =========================================
+
+    async function changeDestination(lngLat) {
+      if (routeLoading || actionLoading) return;
+
+      const destination = [
+        lngLat.lat,
+        lngLat.lng
+      ];
+
+      routeLoading = true;
+      $("findRouteBtn").disabled = true;
+      $("error").textContent = "";
+      updateDashboard();
+
+      try {
+        const sourceText =
+          $("sourceInput").value.trim();
+
+        const source = sourceText
+          ? await resolveLocation(sourceText)
+          : await getCurrentLocation();
+
+        const result = await requestRoadRoute(
+          source,
+          destination
+        );
+
+        selectedDestination = [...destination];
+
+        $("sourceInput").value = formatCoords(source);
+        $("destinationInput").value =
+          formatCoords(destination);
+
+        updateState(result);
+
+      } catch (error) {
+        $("error").textContent =
+          "Could not calculate route: " +
+          error.message;
+      } finally {
+        routeLoading = false;
+        $("findRouteBtn").disabled = false;
+        updateDashboard();
+      }
+    }
+
+    // =========================================
+    // BUTTON EVENTS
+    // =========================================
+
+    $("myLocationBtn").addEventListener(
+      "click",
+      useMyLocation
+    );
+
+    $("findRouteBtn").addEventListener(
+      "click",
+      findTypedRoute
+    );
+
+    $("startBtn").addEventListener("click", () => {
+      postAction("start");
+    });
+
+    $("pauseBtn").addEventListener("click", () => {
+      postAction("pause");
+    });
+
+    $("resetBtn").addEventListener("click", () => {
+      postAction("reset");
+    });
+
+    $("followBtn").addEventListener("click", () => {
+      followVehicle = !followVehicle;
+
+      $("followBtn").textContent = followVehicle
+        ? "◎ Following Vehicle"
+        : "◎ Follow Vehicle";
+
+      if (followVehicle && state?.position) {
+        map.flyTo({
+          center: toLngLat(state.position),
+          zoom: Math.max(map.getZoom(), 16),
+        });
+      }
+    });
+
+    // =========================================
+    // MAPBOX ROUTE LAYERS
+    // =========================================
+
+    map.on("load", () => {
+      mapReady = true;
+
+      map.addSource("full-route", {
+        type: "geojson",
+        data: emptyLine,
+      });
+
+      map.addSource("completed-route", {
+        type: "geojson",
+        data: emptyLine,
+      });
+
+      // New exact-location connectors.
+      map.addSource("source-connector", {
+        type: "geojson",
+        data: emptyLine,
+      });
+
+      map.addSource("destination-connector", {
+        type: "geojson",
+        data: emptyLine,
+      });
+
+      // Original blue road route.
+      map.addLayer({
+        id: "full-route-line",
+        type: "line",
+        source: "full-route",
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": "#2563EB",
+          "line-width": 7,
+          "line-opacity": 0.95,
+        },
+      });
+
+      // Original completed route in black.
+      map.addLayer({
+        id: "completed-route-line",
+        type: "line",
+        source: "completed-route",
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": "#000000",
+          "line-width": 7,
+          "line-opacity": 1,
+        },
+      });
+
+      // Screenshot-style dashed source connector.
+      map.addLayer({
+        id: "source-connector-line",
+        type: "line",
+        source: "source-connector",
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": "#AFC5FF",
+          "line-width": 5,
+          "line-dasharray": [2, 2],
+          "line-opacity": 0.9,
+        },
+      });
+
+      // Dashed destination-to-road connector.
+      map.addLayer({
+        id: "destination-connector-line",
+        type: "line",
+        source: "destination-connector",
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": "#AFC5FF",
+          "line-width": 5,
+          "line-dasharray": [2, 2],
+          "line-opacity": 0.9,
+        },
+      });
+
+      drawRoute();
+      map.resize();
+    });
+
+    // =========================================
+    // CLICK MAP TO SELECT DESTINATION
+    // =========================================
+
+    map.on("click", (event) => {
+      if (routeLoading) return;
+
+      const confirmed = window.confirm(
+        "Set this point as the new delivery destination?"
+      );
+
+      if (confirmed) {
+        changeDestination(event.lngLat);
+      }
+    });
+
+    map.on("error", (event) => {
+      console.error("Mapbox error:", event.error);
+    });
+
+    // =========================================
+    // SOCKET.IO
+    // =========================================
+
+    socket.on("connect", () => {
+      console.log("Socket.IO connected");
+    });
+
+    socket.on("disconnect", () => {
+      $("status").textContent =
+        "Disconnected from delivery server";
+    });
+
+    socket.on("init", updateState);
+    socket.on("location", updateState);
+
+    // =========================================
+    // INITIAL PAGE LOAD
+    // =========================================
+
+    async function loadInitialState() {
+      try {
+        const response = await fetch("/api/state");
+
+        if (!response.ok) {
+          throw new Error("Could not load initial state");
+        }
+
+        updateState(await response.json());
+
+      } catch (error) {
+        $("error").textContent = error.message;
+      }
+    }
+
+    $("destinationInput").value =
+      formatCoords(DEFAULT_DESTINATION);
+
+    // GPS source selected automatically on startup.
+    loadInitialState().finally(() => {
+      calculateGpsRoute(selectedDestination);
+    });
+
+  </script>
+</body>
+</html>
