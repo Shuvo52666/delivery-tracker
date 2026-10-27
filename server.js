@@ -962,6 +962,10 @@ const PORT = process.env.PORT || 3000;
 app.use(express.static("public"));
 app.use(express.json());
 
+app.get("/", (req, res) => {
+  res.redirect("/index.html");
+});
+
 const END = [23.7582, 90.3930];
 
 const SPEED_KMH = 24;
