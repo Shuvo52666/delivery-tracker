@@ -1860,7 +1860,7 @@ map.addLayer({
 </html> -->
 
 
-
+<!-- 
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2200,8 +2200,8 @@ map.addLayer({
 
       <div class="error" id="error"></div>
 
-      <!-- SOURCE AND DESTINATION -->
-
+       SOURCE AND DESTINATION -->
+<!-- 
       <div class="section-title">
         Source & Destination
       </div>
@@ -2256,7 +2256,7 @@ map.addLayer({
       </div>
 
       <!-- ORIGINAL INFORMATION -->
-
+<!-- 
       <div class="section-title">
         Delivery Information
       </div>
@@ -3335,5 +3335,1546 @@ map.addLayer({
     });
 
   </script>
+</body>
+</html> -->
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  />
+  <title>Live Route Tracker</title>
+
+  <!-- Mapbox -->
+  <link
+    href="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.css"
+    rel="stylesheet"
+  />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.js"></script>
+
+  <style>
+    :root {
+      --bg: #f4f6fb;
+      --panel: #ffffff;
+      --text: #142033;
+      --muted: #64748b;
+      --primary: #1685f8;
+      --border: #e3e8f1;
+      --green: #16a34a;
+      --shadow: 0 10px 30px rgba(0,0,0,.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 350px minmax(0, 1fr);
+      width: 100%;
+      height: 100dvh;
+      min-height: 500px;
+    }
+
+    .sidebar {
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 22px;
+      z-index: 2;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .logo {
+      width: 44px;
+      height: 44px;
+      display: grid;
+      place-items: center;
+      border-radius: 13px;
+      background: var(--primary);
+      color: white;
+      font-size: 23px;
+    }
+
+    .brand h1 {
+      font-size: 19px;
+      margin: 0;
+    }
+
+    .brand small {
+      color: var(--muted);
+    }
+
+    .status {
+      border-radius: 12px;
+      padding: 13px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-size: 13px;
+      margin-bottom: 18px;
+      line-height: 1.5;
+    }
+
+    .status.success {
+      background: #ecfdf5;
+      color: #047857;
+    }
+
+    .status.error {
+      background: #fef2f2;
+      color: #b91c1c;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      margin: 17px 0 9px;
+    }
+
+    .field {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      outline: none;
+      background: white;
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .field:focus {
+      border-color: var(--primary);
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+      margin: 8px 0 0;
+    }
+
+    .button {
+      width: 100%;
+      padding: 12px 14px;
+      border: 0;
+      border-radius: 11px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: .2s;
+    }
+
+    .button:hover {
+      filter: brightness(.95);
+    }
+
+    .button:disabled {
+      cursor: not-allowed;
+      opacity: .5;
+    }
+
+    .primary {
+      color: white;
+      background: var(--primary);
+    }
+
+    .dark {
+      color: white;
+      background: #172338;
+    }
+
+    .light {
+      background: #edf2f8;
+      color: #334155;
+    }
+
+    .danger {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+
+    .button-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+      margin-top: 10px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .stat {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 13px;
+    }
+
+    .stat .label {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      margin-bottom: 7px;
+    }
+
+    .stat strong {
+      font-size: 19px;
+    }
+
+    .progress-bar {
+      background: #e5eaf2;
+      height: 9px;
+      border-radius: 20px;
+      overflow: hidden;
+      margin-top: 12px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--green);
+      width: 0%;
+      transition: width .3s ease;
+    }
+
+    .next-step {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 13px;
+      color: #334155;
+      font-size: 13px;
+      line-height: 1.6;
+      margin-top: 10px;
+    }
+
+    .map-container {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    .map-tools {
+      position: absolute;
+      z-index: 1;
+      right: 15px;
+      top: 15px;
+      display: grid;
+      gap: 9px;
+    }
+
+    .map-tool {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      padding: 11px 13px;
+      box-shadow: var(--shadow);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .map-bottom {
+      position: absolute;
+      z-index: 1;
+      bottom: 25px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: white;
+      box-shadow: var(--shadow);
+      border-radius: 30px;
+      padding: 12px 20px;
+      font-size: 12px;
+      color: #334155;
+      text-align: center;
+      pointer-events: none;
+      max-width: 90%;
+    }
+
+    .footer {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-top: auto;
+      padding-top: 22px;
+    }
+
+    @media (max-width: 800px) {
+      .layout {
+        display: flex;
+        flex-direction: column-reverse;
+        height: auto;
+        min-height: 100dvh;
+      }
+
+      .map-container {
+        height: 52dvh;
+        min-height: 300px;
+        flex-shrink: 0;
+      }
+
+      .sidebar {
+        overflow: visible;
+        border-right: 0;
+        border-top: 1px solid var(--border);
+      }
+
+      .map-tools {
+        top: 10px;
+        right: 10px;
+      }
+
+      .map-tool {
+        padding: 10px;
+        font-size: 12px;
+      }
+
+      .map-bottom {
+        bottom: 15px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="logo">➤</div>
+      <div>
+        <h1>Live Route Tracker</h1>
+        <small>GPS Navigation & Road Routes</small>
+      </div>
+    </div>
+
+    <div id="status" class="status">
+      Waiting for location permission...
+    </div>
+
+    <div class="section-title">Your Current Location</div>
+
+    <input
+      class="field"
+      id="currentLocation"
+      value="Waiting for GPS..."
+      readonly
+    />
+
+    <button
+      class="button light"
+      id="locateBtn"
+      style="margin-top:10px"
+    >
+      ◎ Get My Current Location
+    </button>
+
+    <div class="section-title">Destination</div>
+
+    <input
+      class="field"
+      id="destinationInput"
+      placeholder="Latitude, Longitude"
+    />
+
+    <p class="hint">
+      Click anywhere on the map to select a destination,
+      or enter coordinates such as 23.7582, 90.3930.
+    </p>
+
+    <button
+      class="button primary"
+      id="routeBtn"
+      style="margin-top:12px"
+    >
+      Find Road Route
+    </button>
+
+    <div class="section-title">GPS Tracking</div>
+
+    <div class="button-row">
+      <button class="button dark" id="startBtn">
+        ▶ Start Tracking
+      </button>
+
+      <button class="button light" id="stopBtn" disabled>
+        ■ Stop Tracking
+      </button>
+    </div>
+
+    <button
+      class="button danger"
+      id="resetBtn"
+      style="margin-top:10px"
+    >
+      Reset Route
+    </button>
+
+    <div class="stats">
+
+      <div class="stat">
+        <span class="label">Route Distance</span>
+        <strong id="totalDistance">--</strong>
+      </div>
+
+      <div class="stat">
+        <span class="label">Remaining</span>
+        <strong id="remainingDistance">--</strong>
+      </div>
+
+      <div class="stat">
+        <span class="label">Estimated Time</span>
+        <strong id="eta">--</strong>
+      </div>
+
+      <div class="stat">
+        <span class="label">GPS Accuracy</span>
+        <strong id="accuracy">--</strong>
+      </div>
+
+    </div>
+
+    <div class="section-title">Route Progress</div>
+
+    <div class="progress-bar">
+      <div id="progressFill" class="progress-fill"></div>
+    </div>
+
+    <p class="hint" id="progressText">
+      No route selected
+    </p>
+
+    <div class="section-title">Next Direction</div>
+
+    <div class="next-step" id="nextStep">
+      Set a destination to see navigation instructions.
+    </div>
+
+    <div class="footer">
+      Mapbox + OpenStreetMap routing via OSRM.
+      GPS depends on your device and permissions.
+    </div>
+
+  </aside>
+
+  <!-- Map -->
+  <main class="map-container">
+
+    <div id="map"></div>
+
+    <div class="map-tools">
+      <button class="map-tool" id="centerBtn">
+        ◎ Center Map
+      </button>
+
+      <button class="map-tool" id="fitBtn">
+        ⤢ Show Route
+      </button>
+    </div>
+
+    <div class="map-bottom">
+      Tap the map to choose a destination
+    </div>
+
+  </main>
+
+</div>
+
+<script>
+"use strict";
+
+// ======================================
+// MAPBOX TOKEN
+// ======================================
+
+// Use your PUBLIC token beginning with pk.
+mapboxgl.accessToken =
+  "YOUR_MAPBOX_PUBLIC_ACCESS_TOKEN";
+
+// ======================================
+// SETTINGS
+// ======================================
+
+const DEFAULT_CENTER = [90.4125, 23.8103];
+
+// Used for ETA only, not simulated movement.
+const AVERAGE_SPEED_KMH = 24;
+
+// ======================================
+// PRIVATE BROWSER STATE
+// ======================================
+
+let currentPosition = null; // [longitude, latitude]
+let destination = null;
+let routeCoordinates = [];
+let routeSteps = [];
+
+let routeMeters = 0;
+let remainingMeters = 0;
+let traveledMeters = 0;
+
+let watchId = null;
+let tracking = false;
+
+let userMarker = null;
+let destinationMarker = null;
+
+// ======================================
+// HTML HELPERS
+// ======================================
+
+const $ = (id) => document.getElementById(id);
+
+function setStatus(message, type = "") {
+  const element = $("status");
+  element.textContent = message;
+  element.className = "status " + type;
+}
+
+function formatDistance(meters) {
+  if (!Number.isFinite(meters)) return "--";
+
+  if (meters >= 1000) {
+    return (meters / 1000).toFixed(2) + " km";
+  }
+
+  return Math.round(meters) + " m";
+}
+
+function formatETA(seconds) {
+  if (!Number.isFinite(seconds)) return "--";
+
+  const minutes = Math.ceil(seconds / 60);
+
+  if (minutes < 60) {
+    return minutes + " min";
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+
+  return hours + "h " + rest + "m";
+}
+
+function validCoordinatePair(coords) {
+  return (
+    Array.isArray(coords) &&
+    coords.length === 2 &&
+    coords.every(Number.isFinite) &&
+    coords[0] >= -180 &&
+    coords[0] <= 180 &&
+    coords[1] >= -90 &&
+    coords[1] <= 90
+  );
+}
+
+// ======================================
+// MAP INITIALIZATION
+// ======================================
+
+const map = new mapboxgl.Map({
+  container: "map",
+
+  style: "mapbox://styles/mapbox/streets-v12",
+
+  center: DEFAULT_CENTER,
+
+  zoom: 12,
+
+  attributionControl: true
+});
+
+map.addControl(
+  new mapboxgl.NavigationControl(),
+  "bottom-right"
+);
+
+// GeoJSON line features
+function lineData(coordinates) {
+  return {
+    type: "Feature",
+    geometry: {
+      type: "LineString",
+      coordinates
+    },
+    properties: {}
+  };
+}
+
+const emptyLine = lineData([]);
+
+map.on("load", () => {
+
+  // Full road route
+  map.addSource("route", {
+    type: "geojson",
+    data: emptyLine
+  });
+
+  map.addLayer({
+    id: "route-line",
+    type: "line",
+    source: "route",
+
+    layout: {
+      "line-join": "round",
+      "line-cap": "round"
+    },
+
+    paint: {
+      "line-color": "#35a8ff",
+      "line-width": 7,
+      "line-opacity": 0.95
+    }
+  });
+
+  // Completed route
+  map.addSource("completed-route", {
+    type: "geojson",
+    data: emptyLine
+  });
+
+  map.addLayer({
+    id: "completed-route-line",
+    type: "line",
+    source: "completed-route",
+
+    layout: {
+      "line-join": "round",
+      "line-cap": "round"
+    },
+
+    paint: {
+      "line-color": "#111827",
+      "line-width": 7
+    }
+  });
+
+  updateMapRoutes();
+
+  getCurrentLocation();
+});
+
+// ======================================
+// MAP DRAWING
+// ======================================
+
+function updateMapRoutes() {
+
+  const routeSource = map.getSource("route");
+
+  if (routeSource) {
+    routeSource.setData(
+      lineData(routeCoordinates)
+    );
+  }
+
+  const completedSource =
+    map.getSource("completed-route");
+
+  if (completedSource) {
+    completedSource.setData(
+      lineData(getCompletedPath())
+    );
+  }
+}
+
+function updateUserMarker() {
+
+  if (!currentPosition) return;
+
+  if (!userMarker) {
+
+    userMarker = new mapboxgl.Marker({
+      color: "#1685f8"
+    })
+      .setLngLat(currentPosition)
+      .addTo(map);
+
+  } else {
+
+    userMarker.setLngLat(currentPosition);
+
+  }
+}
+
+function updateDestinationMarker() {
+
+  if (destinationMarker) {
+    destinationMarker.remove();
+    destinationMarker = null;
+  }
+
+  if (!destination) return;
+
+  destinationMarker = new mapboxgl.Marker({
+    color: "#ef4444"
+  })
+    .setLngLat(destination)
+    .addTo(map);
+}
+
+function centerOnUser() {
+
+  if (!currentPosition) {
+    getCurrentLocation();
+    return;
+  }
+
+  map.flyTo({
+    center: currentPosition,
+    zoom: 16,
+    essential: true
+  });
+}
+
+function fitRoute() {
+
+  if (routeCoordinates.length < 2) {
+    centerOnUser();
+    return;
+  }
+
+  const bounds = new mapboxgl.LngLatBounds();
+
+  for (const point of routeCoordinates) {
+    bounds.extend(point);
+  }
+
+  map.fitBounds(bounds, {
+    padding: 65,
+    maxZoom: 16,
+    duration: 800
+  });
+}
+
+// ======================================
+// GPS LOCATION
+// ======================================
+
+function gpsErrorMessage(error) {
+
+  if (error.code === 1) {
+    return "Location permission denied. Allow location access.";
+  }
+
+  if (error.code === 2) {
+    return "GPS position unavailable. Try again.";
+  }
+
+  if (error.code === 3) {
+    return "Location request timed out.";
+  }
+
+  return error.message || "Unable to get location.";
+}
+
+function handlePosition(position) {
+
+  const latitude = position.coords.latitude;
+  const longitude = position.coords.longitude;
+
+  currentPosition = [longitude, latitude];
+
+  $("currentLocation").value =
+    latitude.toFixed(6) +
+    ", " +
+    longitude.toFixed(6);
+
+  $("accuracy").textContent =
+    Math.round(position.coords.accuracy) + " m";
+
+  updateUserMarker();
+
+  if (routeCoordinates.length >= 2) {
+    updateProgress();
+  }
+
+  if (tracking) {
+
+    setStatus("Live GPS tracking active", "success");
+
+  } else {
+
+    setStatus("Current location detected", "success");
+
+  }
+}
+
+function getCurrentLocation() {
+
+  if (!navigator.geolocation) {
+
+    setStatus(
+      "Your browser does not support geolocation.",
+      "error"
+    );
+
+    return;
+  }
+
+  setStatus("Detecting your current location...");
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+
+      handlePosition(position);
+
+      map.flyTo({
+        center: currentPosition,
+        zoom: 15
+      });
+
+    },
+
+    (error) => {
+      setStatus(
+        gpsErrorMessage(error),
+        "error"
+      );
+    },
+
+    {
+      enableHighAccuracy: true,
+      timeout: 20000,
+      maximumAge: 0
+    }
+  );
+}
+
+// ======================================
+// LIVE GPS TRACKING
+// ======================================
+
+function startTracking() {
+
+  if (tracking) return;
+
+  if (!navigator.geolocation) {
+    setStatus("GPS is not available.", "error");
+    return;
+  }
+
+  // This only affects THIS browser.
+  tracking = true;
+
+  $("startBtn").disabled = true;
+  $("stopBtn").disabled = false;
+
+  setStatus("Starting live GPS tracking...");
+
+  watchId = navigator.geolocation.watchPosition(
+
+    (position) => {
+
+      handlePosition(position);
+
+      map.easeTo({
+        center: currentPosition,
+        duration: 600
+      });
+
+    },
+
+    (error) => {
+
+      setStatus(
+        gpsErrorMessage(error),
+        "error"
+      );
+
+      // Permission denied: stop tracking.
+      if (error.code === 1) {
+        stopTracking();
+      }
+    },
+
+    {
+      enableHighAccuracy: true,
+      timeout: 20000,
+      maximumAge: 1000
+    }
+  );
+}
+
+function stopTracking() {
+
+  if (watchId !== null) {
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+  }
+
+  tracking = false;
+
+  $("startBtn").disabled = false;
+  $("stopBtn").disabled = true;
+
+  setStatus("GPS tracking stopped.");
+}
+
+// ======================================
+// DESTINATION SELECTION
+// ======================================
+
+function setDestination(coords) {
+
+  if (!validCoordinatePair(coords)) {
+    setStatus("Invalid destination coordinates.", "error");
+    return;
+  }
+
+  destination = [...coords];
+
+  $("destinationInput").value =
+    coords[1].toFixed(6) +
+    ", " +
+    coords[0].toFixed(6);
+
+  updateDestinationMarker();
+
+  setStatus(
+    "Destination selected. Calculating route..."
+  );
+
+  if (currentPosition) {
+    calculateRoute();
+  } else {
+    setStatus(
+      "Destination selected. Get your current location to calculate a route."
+    );
+  }
+}
+
+// Click map to choose destination
+map.on("click", (event) => {
+
+  const coords = [
+    event.lngLat.lng,
+    event.lngLat.lat
+  ];
+
+  setDestination(coords);
+});
+
+function readDestinationInput() {
+
+  const parts = $("destinationInput")
+    .value
+    .trim()
+    .split(",")
+    .map(value => Number(value.trim()));
+
+  if (parts.length !== 2) {
+    return null;
+  }
+
+  // User input is Latitude, Longitude.
+  const latitude = parts[0];
+  const longitude = parts[1];
+
+  const coords = [longitude, latitude];
+
+  return validCoordinatePair(coords)
+    ? coords
+    : null;
+}
+
+// ======================================
+// OSRM ROUTE CALCULATION
+// ======================================
+
+let routeRequestNumber = 0;
+
+async function calculateRoute() {
+
+  if (!currentPosition || !destination) {
+
+    setStatus(
+      "Current location and destination are required.",
+      "error"
+    );
+
+    return;
+  }
+
+  const requestNumber = ++routeRequestNumber;
+
+  const source = [...currentPosition];
+  const target = [...destination];
+
+  setStatus("Finding road route...");
+
+  try {
+
+    // OSRM expects longitude, latitude.
+    const coordinates =
+      `${source[0]},${source[1]};` +
+      `${target[0]},${target[1]}`;
+
+    const url =
+      "https://router.project-osrm.org/route/v1/driving/" +
+      coordinates +
+      "?overview=full" +
+      "&geometries=geojson" +
+      "&steps=true";
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(
+        "Routing service returned HTTP " +
+        response.status
+      );
+    }
+
+    const data = await response.json();
+
+    // Discard outdated route responses.
+    if (requestNumber !== routeRequestNumber) {
+      return;
+    }
+
+    if (
+      data.code !== "Ok" ||
+      !data.routes ||
+      !data.routes.length
+    ) {
+      throw new Error(
+        data.message || "No road route found."
+      );
+    }
+
+    const trip = data.routes[0];
+
+    routeCoordinates =
+      trip.geometry.coordinates;
+
+    routeMeters = trip.distance;
+
+    remainingMeters = routeMeters;
+    traveledMeters = 0;
+
+    routeSteps = [];
+
+    for (const leg of trip.legs || []) {
+
+      for (const step of leg.steps || []) {
+
+        routeSteps.push({
+          location: step.maneuver.location,
+          text: instructionText(
+            step.maneuver,
+            step.name
+          )
+        });
+
+      }
+    }
+
+    updateMapRoutes();
+    updateStats();
+    updateProgress();
+    fitRoute();
+
+    setStatus(
+      "Route calculated successfully.",
+      "success"
+    );
+
+  } catch (error) {
+
+    if (requestNumber !== routeRequestNumber) {
+      return;
+    }
+
+    setStatus(error.message, "error");
+  }
+}
+
+// ======================================
+// NAVIGATION INSTRUCTIONS
+// ======================================
+
+function instructionText(maneuver, name) {
+
+  const road = name
+    ? " onto " + name
+    : "";
+
+  switch (maneuver.type) {
+
+    case "depart":
+      return "Start your journey";
+
+    case "arrive":
+      return "You have arrived at your destination";
+
+    case "turn":
+      return (
+        "Turn " +
+        (maneuver.modifier || "ahead") +
+        road
+      );
+
+    case "new name":
+      return "Continue" + road;
+
+    case "roundabout":
+      return "Enter the roundabout" + road;
+
+    case "merge":
+      return "Merge" + road;
+
+    case "fork":
+      return (
+        "Keep " +
+        (maneuver.modifier || "ahead") +
+        road
+      );
+
+    case "on ramp":
+      return "Take the ramp" + road;
+
+    case "off ramp":
+      return "Exit the ramp" + road;
+
+    default:
+      return "Continue" + road;
+  }
+}
+
+// ======================================
+// DISTANCE HELPERS
+// ======================================
+
+function distanceBetween(a, b) {
+
+  // Coordinates: [longitude, latitude]
+  const rad = Math.PI / 180;
+
+  const lat1 = a[1] * rad;
+  const lat2 = b[1] * rad;
+
+  const deltaLat = (b[1] - a[1]) * rad;
+  const deltaLon = (b[0] - a[0]) * rad;
+
+  const h =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(lat1) *
+      Math.cos(lat2) *
+      Math.sin(deltaLon / 2) ** 2;
+
+  return (
+    6371000 *
+    2 *
+    Math.atan2(
+      Math.sqrt(h),
+      Math.sqrt(Math.max(0, 1 - h))
+    )
+  );
+}
+
+// ======================================
+// NEAREST POINT ON THE ROAD
+// ======================================
+
+function nearestRoutePosition(position) {
+
+  if (routeCoordinates.length < 2) {
+    return null;
+  }
+
+  const referenceLatitude =
+    position[1] * Math.PI / 180;
+
+  const xScale =
+    Math.cos(referenceLatitude) * 111320;
+
+  const yScale = 111320;
+
+  let bestDistance = Infinity;
+  let bestDistanceAlong = 0;
+  let bestSegment = 0;
+  let bestFraction = 0;
+
+  let accumulated = 0;
+
+  for (
+    let i = 0;
+    i < routeCoordinates.length - 1;
+    i++
+  ) {
+
+    const a = routeCoordinates[i];
+    const b = routeCoordinates[i + 1];
+
+    const ax = (a[0] - position[0]) * xScale;
+    const ay = (a[1] - position[1]) * yScale;
+
+    const bx = (b[0] - position[0]) * xScale;
+    const by = (b[1] - position[1]) * yScale;
+
+    const dx = bx - ax;
+    const dy = by - ay;
+
+    const lengthSquared = dx * dx + dy * dy;
+
+    const t = lengthSquared > 0
+      ? Math.max(
+          0,
+          Math.min(
+            1,
+            -(ax * dx + ay * dy) / lengthSquared
+          )
+        )
+      : 0;
+
+    const px = ax + t * dx;
+    const py = ay + t * dy;
+
+    const offRoad = Math.hypot(px, py);
+
+    const segmentMeters = distanceBetween(a, b);
+
+    if (offRoad < bestDistance) {
+
+      bestDistance = offRoad;
+      bestDistanceAlong =
+        accumulated + segmentMeters * t;
+
+      bestSegment = i;
+      bestFraction = t;
+    }
+
+    accumulated += segmentMeters;
+  }
+
+  return {
+    distanceAlong: bestDistanceAlong,
+    offRoad: bestDistance,
+    segment: bestSegment,
+    fraction: bestFraction,
+    measuredTotal: accumulated
+  };
+}
+
+// ======================================
+// COMPLETED ROUTE
+// ======================================
+
+let completedSegment = 0;
+let completedFraction = 0;
+
+function getCompletedPath() {
+
+  if (routeCoordinates.length < 2) {
+    return [];
+  }
+
+  const path = routeCoordinates.slice(
+    0,
+    completedSegment + 1
+  );
+
+  const a = routeCoordinates[completedSegment];
+  const b = routeCoordinates[completedSegment + 1];
+
+  if (a && b) {
+
+    path.push([
+      a[0] + (b[0] - a[0]) * completedFraction,
+      a[1] + (b[1] - a[1]) * completedFraction
+    ]);
+  }
+
+  return path;
+}
+
+// ======================================
+// UPDATE ROUTE PROGRESS USING REAL GPS
+// ======================================
+
+function updateProgress() {
+
+  if (!currentPosition || !routeMeters) {
+    return;
+  }
+
+  const nearest = nearestRoutePosition(
+    currentPosition
+  );
+
+  if (!nearest) return;
+
+  // If user moves far away from the selected
+  // road, do not treat it as completed progress.
+  if (nearest.offRoad > 100) {
+
+    $("nextStep").textContent =
+      "You are away from the planned route. " +
+      "Select Find Road Route to recalculate.";
+
+    return;
+  }
+
+  const fraction = nearest.measuredTotal > 0
+    ? nearest.distanceAlong / nearest.measuredTotal
+    : 0;
+
+  const progress = Math.max(
+    0,
+    Math.min(1, fraction)
+  );
+
+  traveledMeters = routeMeters * progress;
+  remainingMeters = Math.max(
+    0,
+    routeMeters - traveledMeters
+  );
+
+  completedSegment = nearest.segment;
+  completedFraction = nearest.fraction;
+
+  updateMapRoutes();
+  updateStats();
+
+  const nearDestination =
+    distanceBetween(
+      currentPosition,
+      destination
+    ) < 25;
+
+  if (nearDestination) {
+
+    $("nextStep").textContent =
+      "You have arrived at your destination!";
+
+    setStatus(
+      "Destination reached!",
+      "success"
+    );
+
+  } else {
+
+    updateNextInstruction();
+
+  }
+}
+
+function updateNextInstruction() {
+
+  if (!routeSteps.length || !currentPosition) {
+    return;
+  }
+
+  let nearestStep = null;
+  let nearestDistance = Infinity;
+
+  for (const step of routeSteps) {
+
+    const stepCoords = step.location;
+
+    const distance = distanceBetween(
+      currentPosition,
+      stepCoords
+    );
+
+    if (distance < nearestDistance) {
+
+      nearestDistance = distance;
+      nearestStep = step;
+
+    }
+  }
+
+  if (nearestStep) {
+
+    $("nextStep").textContent =
+      nearestStep.text +
+      " (" +
+      formatDistance(nearestDistance) +
+      " nearby)";
+
+  }
+}
+
+// ======================================
+// STATS
+// ======================================
+
+function updateStats() {
+
+  $("totalDistance").textContent =
+    formatDistance(routeMeters);
+
+  $("remainingDistance").textContent =
+    formatDistance(remainingMeters);
+
+  const etaSeconds =
+    remainingMeters /
+    (AVERAGE_SPEED_KMH * 1000 / 3600);
+
+  $("eta").textContent =
+    formatETA(etaSeconds);
+
+  const progress = routeMeters
+    ? Math.round(
+        (traveledMeters / routeMeters) * 100
+      )
+    : 0;
+
+  $("progressFill").style.width =
+    progress + "%";
+
+  $("progressText").textContent =
+    progress + "% of road route completed";
+}
+
+// ======================================
+// RESET
+// ======================================
+
+function resetRoute() {
+
+  ++routeRequestNumber;
+
+  destination = null;
+
+  routeCoordinates = [];
+  routeSteps = [];
+
+  routeMeters = 0;
+  remainingMeters = 0;
+  traveledMeters = 0;
+
+  completedSegment = 0;
+  completedFraction = 0;
+
+  $("destinationInput").value = "";
+
+  if (destinationMarker) {
+    destinationMarker.remove();
+    destinationMarker = null;
+  }
+
+  updateMapRoutes();
+
+  $("totalDistance").textContent = "--";
+  $("remainingDistance").textContent = "--";
+  $("eta").textContent = "--";
+
+  $("progressFill").style.width = "0%";
+  $("progressText").textContent =
+    "No route selected";
+
+  $("nextStep").textContent =
+    "Select a destination to see directions.";
+
+  setStatus("Route reset successfully.");
+
+  centerOnUser();
+}
+
+// ======================================
+// BUTTON EVENTS
+// ======================================
+
+$("locateBtn").addEventListener(
+  "click",
+  getCurrentLocation
+);
+
+$("centerBtn").addEventListener(
+  "click",
+  centerOnUser
+);
+
+$("fitBtn").addEventListener(
+  "click",
+  fitRoute
+);
+
+$("startBtn").addEventListener(
+  "click",
+  startTracking
+);
+
+$("stopBtn").addEventListener(
+  "click",
+  stopTracking
+);
+
+$("resetBtn").addEventListener(
+  "click",
+  resetRoute
+);
+
+$("routeBtn").addEventListener(
+  "click",
+  () => {
+
+    const coords = readDestinationInput();
+
+    if (coords) {
+
+      destination = coords;
+      updateDestinationMarker();
+      calculateRoute();
+
+    } else {
+
+      setStatus(
+        "Enter a valid destination: latitude, longitude",
+        "error"
+      );
+
+    }
+  }
+);
+
+// ======================================
+// CLEANUP
+// ======================================
+
+window.addEventListener("pagehide", () => {
+
+  if (watchId !== null) {
+    navigator.geolocation.clearWatch(watchId);
+  }
+
+});
+
+</script>
+
 </body>
 </html>

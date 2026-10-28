@@ -1491,575 +1491,575 @@
 
 
 
-import express from "express";
-import http from "node:http";
-import { randomUUID } from "node:crypto";
-import { Server } from "socket.io";
-
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
-
-const PORT = process.env.PORT || 3000;
-const SPEED_KMH = 24;
-const TICK_MS = 500;
-const METERS_PER_TICK =
-  (SPEED_KMH * 1000 / 3600) * (TICK_MS / 1000);
-
-const SESSION_COOKIE = "delivery_session";
-const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
-
-// Each visitor has a separate simulation.
-const sessions = new Map();
-
-function cookieValue(header = "", name) {
-  const entry = header
-    .split(";")
-    .map((v) => v.trim())
-    .find((v) => v.startsWith(`${name}=`));
-
-  return entry ? entry.slice(name.length + 1) : null;
-}
-
-function createSession(id) {
-  return {
-    id,
-    route: [],
-    instructions: [],
-    routeSource: "waiting for location",
-    cumulative: [0],
-    totalMeters: 0,
-    traveledMeters: 0,
-    running: false,
-    ready: false,
-    loadingRoute: false,
-    exactSource: null,
-    exactDestination: null,
-    lastSeen: Date.now(),
-  };
-}
-
-function getSession(id) {
-  let state = sessions.get(id);
-
-  if (!state) {
-    state = createSession(id);
-    sessions.set(id, state);
-  }
-
-  state.lastSeen = Date.now();
-  return state;
-}
-
-// Anonymous cookie for separating browser sessions.
-// Not an authentication system.
-app.use((req, res, next) => {
-  let id = cookieValue(
-    req.headers.cookie,
-    SESSION_COOKIE
-  );
-
-  if (!id || !/^[0-9a-f-]{36}$/i.test(id)) {
-    id = randomUUID();
-
-    res.cookie(SESSION_COOKIE, id, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      maxAge: SESSION_TTL_MS,
-      path: "/",
-    });
-  }
-
-  req.deliveryState = getSession(id);
-  next();
-});
-
-app.use(express.static("public"));
-app.use(express.json());
-
-app.get("/", (_req, res) => {
-  res.redirect("/index.html");
-});
-
-// Coordinate validation
-function validCoords(coords) {
-  return (
-    Array.isArray(coords) &&
-    coords.length === 2 &&
-    coords.every(Number.isFinite) &&
-    coords[0] >= -90 &&
-    coords[0] <= 90 &&
-    coords[1] >= -180 &&
-    coords[1] <= 180
-  );
-}
-
-// Distance calculation
-function distance(a, b) {
-  const rad = Math.PI / 180;
-
-  const lat1 = a[0] * rad;
-  const lat2 = b[0] * rad;
-
-  const dLat = (b[0] - a[0]) * rad;
-  const dLon = (b[1] - a[1]) * rad;
-
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) *
-      Math.cos(lat2) *
-      Math.sin(dLon / 2) ** 2;
-
-  return (
-    6371000 *
-    2 *
-    Math.atan2(
-      Math.sqrt(h),
-      Math.sqrt(Math.max(0, 1 - h))
-    )
-  );
-}
-
-function buildCumulative(points) {
-  const offsets = [0];
-
-  for (let i = 1; i < points.length; i++) {
-    offsets.push(
-      offsets[i - 1] +
-      distance(points[i - 1], points[i])
-    );
-  }
-
-  return offsets;
-}
-
-function pointAt(s, meters) {
-  if (!s.route.length) return null;
-
-  if (meters <= 0) return [...s.route[0]];
-
-  if (meters >= s.totalMeters) {
-    return [...s.route.at(-1)];
-  }
-
-  let lo = 0;
-  let hi = s.cumulative.length - 1;
-
-  while (lo + 1 < hi) {
-    const mid = (lo + hi) >> 1;
-
-    if (s.cumulative[mid] <= meters) {
-      lo = mid;
-    } else {
-      hi = mid;
-    }
-  }
-
-  const length = s.cumulative[hi] - s.cumulative[lo];
-
-  const t = length
-    ? (meters - s.cumulative[lo]) / length
-    : 0;
-
-  return s.route[lo].map(
-    (value, index) =>
-      value + (s.route[hi][index] - value) * t
-  );
-}
-
-function traveledPath(s) {
-  if (!s.route.length) return [];
-
-  const path = [];
-
-  for (let i = 0; i < s.route.length; i++) {
-    if (s.cumulative[i] <= s.traveledMeters) {
-      path.push(s.route[i]);
-    } else {
-      break;
-    }
-  }
-
-  const current = pointAt(s, s.traveledMeters);
-
-  if (current) path.push(current);
-
-  return path;
-}
+// import express from "express";
+// import http from "node:http";
+// import { randomUUID } from "node:crypto";
+// import { Server } from "socket.io";
+
+// const app = express();
+// const server = http.createServer(app);
+// const io = new Server(server);
+
+// const PORT = process.env.PORT || 3000;
+// const SPEED_KMH = 24;
+// const TICK_MS = 500;
+// const METERS_PER_TICK =
+//   (SPEED_KMH * 1000 / 3600) * (TICK_MS / 1000);
+
+// const SESSION_COOKIE = "delivery_session";
+// const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
+// // Each visitor has a separate simulation.
+// const sessions = new Map();
+
+// function cookieValue(header = "", name) {
+//   const entry = header
+//     .split(";")
+//     .map((v) => v.trim())
+//     .find((v) => v.startsWith(`${name}=`));
+
+//   return entry ? entry.slice(name.length + 1) : null;
+// }
+
+// function createSession(id) {
+//   return {
+//     id,
+//     route: [],
+//     instructions: [],
+//     routeSource: "waiting for location",
+//     cumulative: [0],
+//     totalMeters: 0,
+//     traveledMeters: 0,
+//     running: false,
+//     ready: false,
+//     loadingRoute: false,
+//     exactSource: null,
+//     exactDestination: null,
+//     lastSeen: Date.now(),
+//   };
+// }
+
+// function getSession(id) {
+//   let state = sessions.get(id);
+
+//   if (!state) {
+//     state = createSession(id);
+//     sessions.set(id, state);
+//   }
+
+//   state.lastSeen = Date.now();
+//   return state;
+// }
+
+// // Anonymous cookie for separating browser sessions.
+// // Not an authentication system.
+// app.use((req, res, next) => {
+//   let id = cookieValue(
+//     req.headers.cookie,
+//     SESSION_COOKIE
+//   );
+
+//   if (!id || !/^[0-9a-f-]{36}$/i.test(id)) {
+//     id = randomUUID();
+
+//     res.cookie(SESSION_COOKIE, id, {
+//       httpOnly: true,
+//       sameSite: "lax",
+//       secure: process.env.NODE_ENV === "production",
+//       maxAge: SESSION_TTL_MS,
+//       path: "/",
+//     });
+//   }
+
+//   req.deliveryState = getSession(id);
+//   next();
+// });
+
+// app.use(express.static("public"));
+// app.use(express.json());
+
+// app.get("/", (_req, res) => {
+//   res.redirect("/index.html");
+// });
+
+// // Coordinate validation
+// function validCoords(coords) {
+//   return (
+//     Array.isArray(coords) &&
+//     coords.length === 2 &&
+//     coords.every(Number.isFinite) &&
+//     coords[0] >= -90 &&
+//     coords[0] <= 90 &&
+//     coords[1] >= -180 &&
+//     coords[1] <= 180
+//   );
+// }
+
+// // Distance calculation
+// function distance(a, b) {
+//   const rad = Math.PI / 180;
+
+//   const lat1 = a[0] * rad;
+//   const lat2 = b[0] * rad;
+
+//   const dLat = (b[0] - a[0]) * rad;
+//   const dLon = (b[1] - a[1]) * rad;
+
+//   const h =
+//     Math.sin(dLat / 2) ** 2 +
+//     Math.cos(lat1) *
+//       Math.cos(lat2) *
+//       Math.sin(dLon / 2) ** 2;
+
+//   return (
+//     6371000 *
+//     2 *
+//     Math.atan2(
+//       Math.sqrt(h),
+//       Math.sqrt(Math.max(0, 1 - h))
+//     )
+//   );
+// }
+
+// function buildCumulative(points) {
+//   const offsets = [0];
+
+//   for (let i = 1; i < points.length; i++) {
+//     offsets.push(
+//       offsets[i - 1] +
+//       distance(points[i - 1], points[i])
+//     );
+//   }
+
+//   return offsets;
+// }
+
+// function pointAt(s, meters) {
+//   if (!s.route.length) return null;
+
+//   if (meters <= 0) return [...s.route[0]];
+
+//   if (meters >= s.totalMeters) {
+//     return [...s.route.at(-1)];
+//   }
+
+//   let lo = 0;
+//   let hi = s.cumulative.length - 1;
+
+//   while (lo + 1 < hi) {
+//     const mid = (lo + hi) >> 1;
+
+//     if (s.cumulative[mid] <= meters) {
+//       lo = mid;
+//     } else {
+//       hi = mid;
+//     }
+//   }
+
+//   const length = s.cumulative[hi] - s.cumulative[lo];
+
+//   const t = length
+//     ? (meters - s.cumulative[lo]) / length
+//     : 0;
+
+//   return s.route[lo].map(
+//     (value, index) =>
+//       value + (s.route[hi][index] - value) * t
+//   );
+// }
+
+// function traveledPath(s) {
+//   if (!s.route.length) return [];
+
+//   const path = [];
+
+//   for (let i = 0; i < s.route.length; i++) {
+//     if (s.cumulative[i] <= s.traveledMeters) {
+//       path.push(s.route[i]);
+//     } else {
+//       break;
+//     }
+//   }
+
+//   const current = pointAt(s, s.traveledMeters);
+
+//   if (current) path.push(current);
+
+//   return path;
+// }
 
-function upcomingStep(s) {
-  for (const step of s.instructions) {
-    if (step.metersFromStart > s.traveledMeters + 8) {
-      return step;
-    }
-  }
+// function upcomingStep(s) {
+//   for (const step of s.instructions) {
+//     if (step.metersFromStart > s.traveledMeters + 8) {
+//       return step;
+//     }
+//   }
 
-  return s.instructions.at(-1) || null;
-}
+//   return s.instructions.at(-1) || null;
+// }
 
-function snapshot(s) {
-  if (!s.ready) {
-    return {
-      ready: false,
-      running: false,
-      routeSource: s.routeSource,
-    };
-  }
-
-  const delivered =
-    s.traveledMeters >= s.totalMeters;
+// function snapshot(s) {
+//   if (!s.ready) {
+//     return {
+//       ready: false,
+//       running: false,
+//       routeSource: s.routeSource,
+//     };
+//   }
+
+//   const delivered =
+//     s.traveledMeters >= s.totalMeters;
 
-  const remaining = Math.max(
-    0,
-    s.totalMeters - s.traveledMeters
-  );
-
-  return {
-    ready: s.ready,
-    running: s.running,
-    delivered,
-
-    route: s.route,
-    position: pointAt(s, s.traveledMeters),
-    path: traveledPath(s),
+//   const remaining = Math.max(
+//     0,
+//     s.totalMeters - s.traveledMeters
+//   );
+
+//   return {
+//     ready: s.ready,
+//     running: s.running,
+//     delivered,
+
+//     route: s.route,
+//     position: pointAt(s, s.traveledMeters),
+//     path: traveledPath(s),
 
-    start: s.route[0],
-    destination: s.route.at(-1),
-
-    exactSource: s.exactSource,
-    exactDestination: s.exactDestination,
-
-    routeSource: s.routeSource,
-
-    progress: s.totalMeters
-      ? Math.round(
-          (100 * s.traveledMeters) / s.totalMeters
-        )
-      : 100,
-
-    remainingMeters: Math.round(remaining),
-    totalMeters: Math.round(s.totalMeters),
-
-    etaSeconds: Math.ceil(
-      remaining / (SPEED_KMH * 1000 / 3600)
-    ),
-
-    speedKmh: SPEED_KMH,
-
-    nextStep: delivered
-      ? null
-      : upcomingStep(s),
-  };
-}
-
-// Send updates only to this visitor's socket room.
-function emitSession(s, event, payload = snapshot(s)) {
-  io.to(s.id).emit(event, payload);
-}
-
-function instructionText(maneuver, name) {
-  const road = name ? ` onto ${name}` : "";
-
-  switch (maneuver.type) {
-    case "depart":
-      return "Start your delivery";
-
-    case "arrive":
-      return "Arrive at customer destination";
-
-    case "turn":
-      return `Turn ${maneuver.modifier || "ahead"}${road}`;
-
-    case "new name":
-      return `Continue${road}`;
-
-    case "roundabout":
-      return `Enter roundabout${road}`;
-
-    case "merge":
-      return `Merge ${maneuver.modifier || ""}${road}`;
-
-    case "on ramp":
-      return `Take the ramp${road}`;
-
-    case "off ramp":
-      return `Exit the ramp${road}`;
-
-    case "fork":
-      return `Keep ${maneuver.modifier || "ahead"}${road}`;
-
-    case "end of road":
-      return `Turn ${maneuver.modifier || "ahead"}${road}`;
-
-    default:
-      return `Continue${road}`;
-  }
-}
-
-// OSRM route calculation
-async function loadRoadRoute(s, start, end) {
-  if (s.loadingRoute) {
-    throw new Error("Route calculation in progress");
-  }
-
-  if (!validCoords(start) || !validCoords(end)) {
-    throw new Error("Invalid source or destination");
-  }
-
-  s.loadingRoute = true;
-
-  try {
-    const url =
-      "https://router.project-osrm.org/route/v1/driving/" +
-      `${start[1]},${start[0]};${end[1]},${end[0]}` +
-      "?overview=full&geometries=geojson" +
-      "&steps=true&radiuses=100;100";
-
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(15000),
-    });
-
-    const json = await response.json();
-
-    if (
-      !response.ok ||
-      json.code !== "Ok" ||
-      !json.routes?.[0]?.geometry?.coordinates?.length
-    ) {
-      throw new Error(
-        json.message ||
-          json.code ||
-          `OSRM HTTP ${response.status}`
-      );
-    }
-
-    const trip = json.routes[0];
-
-    const points = trip.geometry.coordinates.map(
-      ([lng, lat]) => [lat, lng]
-    );
-
-    if (points.length < 2) {
-      throw new Error("Route requires at least 2 points");
-    }
-
-    const offsets = buildCumulative(points);
-    const length = offsets.at(-1);
-
-    if (length <= 0) {
-      throw new Error(
-        "Route distance must be positive"
-      );
-    }
-
-    const steps = [];
-    let routeCursor = 0;
-
-    for (const leg of trip.legs) {
-      for (const step of leg.steps) {
-        const [lng, lat] = step.maneuver.location;
-
-        let best = routeCursor;
-        let closest = Infinity;
-
-        for (
-          let i = routeCursor;
-          i < points.length;
-          i++
-        ) {
-          const d = distance(
-            points[i],
-            [lat, lng]
-          );
-
-          if (d < closest) {
-            closest = d;
-            best = i;
-          }
-
-          if (closest < 3 && d > 30) break;
-        }
-
-        routeCursor = best;
-
-        steps.push({
-          text: instructionText(
-            step.maneuver,
-            step.name
-          ),
-          metersFromStart: offsets[best] ?? 0,
-        });
-      }
-    }
-
-    // Update only the current visitor's route.
-    s.route = points;
-    s.cumulative = offsets;
-    s.totalMeters = length;
-    s.instructions = steps;
-
-    s.routeSource = "OSRM road directions";
-    s.traveledMeters = 0;
-    s.running = false;
-    s.ready = true;
-
-    s.exactSource = [...start];
-    s.exactDestination = [...end];
-
-    emitSession(s, "init");
-  } finally {
-    s.loadingRoute = false;
-  }
-}
-
-// Socket.IO individual connections
-io.on("connection", (socket) => {
-  const id = cookieValue(
-    socket.handshake.headers.cookie,
-    SESSION_COOKIE
-  );
-
-  if (!id || !sessions.has(id)) {
-    socket.emit("error", {
-      message:
-        "Open the website before connecting to the socket",
-    });
-
-    socket.disconnect(true);
-    return;
-  }
-
-  const state = getSession(id);
-
-  socket.join(id);
-  socket.emit("init", snapshot(state));
-});
-
-// Current visitor's state
-app.get("/api/state", (req, res) => {
-  res.json(snapshot(req.deliveryState));
-});
-
-// Independent start, pause, reset
-for (const action of ["start", "pause", "reset"]) {
-  app.post(`/api/${action}`, (req, res) => {
-    const s = req.deliveryState;
-
-    if (!s.ready || s.loadingRoute) {
-      return res.status(503).json({
-        error: "Route is not ready",
-      });
-    }
-
-    if (action === "start") {
-      if (s.traveledMeters >= s.totalMeters) {
-        s.traveledMeters = 0;
-      }
-
-      s.running = true;
-    } else if (action === "pause") {
-      s.running = false;
-    } else {
-      s.running = false;
-      s.traveledMeters = 0;
-    }
-
-    const state = snapshot(s);
-
-    emitSession(s, "location", state);
-
-    return res.json(state);
-  });
-}
-
-// Route creation for current visitor
-app.post("/api/route", async (req, res) => {
-  const s = req.deliveryState;
-
-  const { source, destination } =
-    req.body || {};
-
-  if (!validCoords(source)) {
-    return res.status(400).json({
-      error:
-        "Expected source [latitude, longitude]",
-    });
-  }
-
-  if (!validCoords(destination)) {
-    return res.status(400).json({
-      error:
-        "Expected destination [latitude, longitude]",
-    });
-  }
-
-  if (s.loadingRoute) {
-    return res.status(409).json({
-      error:
-        "Route calculation already in progress",
-    });
-  }
-
-  try {
-    s.running = false;
-
-    await loadRoadRoute(
-      s,
-      source,
-      destination
-    );
-
-    return res.json(snapshot(s));
-  } catch (error) {
-    return res.status(502).json({
-      error: error.message,
-    });
-  }
-});
-
-// Move each active delivery independently.
-setInterval(() => {
-  const now = Date.now();
-
-  for (const [id, s] of sessions) {
-    if (
-      now - s.lastSeen > SESSION_TTL_MS &&
-      !s.loadingRoute
-    ) {
-      sessions.delete(id);
-      continue;
-    }
-
-    if (
-      !s.running ||
-      !s.ready ||
-      s.loadingRoute
-    ) {
-      continue;
-    }
-
-    s.traveledMeters = Math.min(
-      s.totalMeters,
-      s.traveledMeters + METERS_PER_TICK
-    );
-
-    if (s.traveledMeters >= s.totalMeters) {
-      s.running = false;
-    }
-
-    emitSession(s, "location");
-  }
-}, TICK_MS);
-
-// Persistent Node.js hosting
-if (!process.env.VERCEL) {
-  server.listen(PORT, () => {
-    console.log(
-      `Delivery tracker: http://localhost:${PORT}`
-    );
-  });
-}
-
-export default server;
+//     start: s.route[0],
+//     destination: s.route.at(-1),
+
+//     exactSource: s.exactSource,
+//     exactDestination: s.exactDestination,
+
+//     routeSource: s.routeSource,
+
+//     progress: s.totalMeters
+//       ? Math.round(
+//           (100 * s.traveledMeters) / s.totalMeters
+//         )
+//       : 100,
+
+//     remainingMeters: Math.round(remaining),
+//     totalMeters: Math.round(s.totalMeters),
+
+//     etaSeconds: Math.ceil(
+//       remaining / (SPEED_KMH * 1000 / 3600)
+//     ),
+
+//     speedKmh: SPEED_KMH,
+
+//     nextStep: delivered
+//       ? null
+//       : upcomingStep(s),
+//   };
+// }
+
+// // Send updates only to this visitor's socket room.
+// function emitSession(s, event, payload = snapshot(s)) {
+//   io.to(s.id).emit(event, payload);
+// }
+
+// function instructionText(maneuver, name) {
+//   const road = name ? ` onto ${name}` : "";
+
+//   switch (maneuver.type) {
+//     case "depart":
+//       return "Start your delivery";
+
+//     case "arrive":
+//       return "Arrive at customer destination";
+
+//     case "turn":
+//       return `Turn ${maneuver.modifier || "ahead"}${road}`;
+
+//     case "new name":
+//       return `Continue${road}`;
+
+//     case "roundabout":
+//       return `Enter roundabout${road}`;
+
+//     case "merge":
+//       return `Merge ${maneuver.modifier || ""}${road}`;
+
+//     case "on ramp":
+//       return `Take the ramp${road}`;
+
+//     case "off ramp":
+//       return `Exit the ramp${road}`;
+
+//     case "fork":
+//       return `Keep ${maneuver.modifier || "ahead"}${road}`;
+
+//     case "end of road":
+//       return `Turn ${maneuver.modifier || "ahead"}${road}`;
+
+//     default:
+//       return `Continue${road}`;
+//   }
+// }
+
+// // OSRM route calculation
+// async function loadRoadRoute(s, start, end) {
+//   if (s.loadingRoute) {
+//     throw new Error("Route calculation in progress");
+//   }
+
+//   if (!validCoords(start) || !validCoords(end)) {
+//     throw new Error("Invalid source or destination");
+//   }
+
+//   s.loadingRoute = true;
+
+//   try {
+//     const url =
+//       "https://router.project-osrm.org/route/v1/driving/" +
+//       `${start[1]},${start[0]};${end[1]},${end[0]}` +
+//       "?overview=full&geometries=geojson" +
+//       "&steps=true&radiuses=100;100";
+
+//     const response = await fetch(url, {
+//       signal: AbortSignal.timeout(15000),
+//     });
+
+//     const json = await response.json();
+
+//     if (
+//       !response.ok ||
+//       json.code !== "Ok" ||
+//       !json.routes?.[0]?.geometry?.coordinates?.length
+//     ) {
+//       throw new Error(
+//         json.message ||
+//           json.code ||
+//           `OSRM HTTP ${response.status}`
+//       );
+//     }
+
+//     const trip = json.routes[0];
+
+//     const points = trip.geometry.coordinates.map(
+//       ([lng, lat]) => [lat, lng]
+//     );
+
+//     if (points.length < 2) {
+//       throw new Error("Route requires at least 2 points");
+//     }
+
+//     const offsets = buildCumulative(points);
+//     const length = offsets.at(-1);
+
+//     if (length <= 0) {
+//       throw new Error(
+//         "Route distance must be positive"
+//       );
+//     }
+
+//     const steps = [];
+//     let routeCursor = 0;
+
+//     for (const leg of trip.legs) {
+//       for (const step of leg.steps) {
+//         const [lng, lat] = step.maneuver.location;
+
+//         let best = routeCursor;
+//         let closest = Infinity;
+
+//         for (
+//           let i = routeCursor;
+//           i < points.length;
+//           i++
+//         ) {
+//           const d = distance(
+//             points[i],
+//             [lat, lng]
+//           );
+
+//           if (d < closest) {
+//             closest = d;
+//             best = i;
+//           }
+
+//           if (closest < 3 && d > 30) break;
+//         }
+
+//         routeCursor = best;
+
+//         steps.push({
+//           text: instructionText(
+//             step.maneuver,
+//             step.name
+//           ),
+//           metersFromStart: offsets[best] ?? 0,
+//         });
+//       }
+//     }
+
+//     // Update only the current visitor's route.
+//     s.route = points;
+//     s.cumulative = offsets;
+//     s.totalMeters = length;
+//     s.instructions = steps;
+
+//     s.routeSource = "OSRM road directions";
+//     s.traveledMeters = 0;
+//     s.running = false;
+//     s.ready = true;
+
+//     s.exactSource = [...start];
+//     s.exactDestination = [...end];
+
+//     emitSession(s, "init");
+//   } finally {
+//     s.loadingRoute = false;
+//   }
+// }
+
+// // Socket.IO individual connections
+// io.on("connection", (socket) => {
+//   const id = cookieValue(
+//     socket.handshake.headers.cookie,
+//     SESSION_COOKIE
+//   );
+
+//   if (!id || !sessions.has(id)) {
+//     socket.emit("error", {
+//       message:
+//         "Open the website before connecting to the socket",
+//     });
+
+//     socket.disconnect(true);
+//     return;
+//   }
+
+//   const state = getSession(id);
+
+//   socket.join(id);
+//   socket.emit("init", snapshot(state));
+// });
+
+// // Current visitor's state
+// app.get("/api/state", (req, res) => {
+//   res.json(snapshot(req.deliveryState));
+// });
+
+// // Independent start, pause, reset
+// for (const action of ["start", "pause", "reset"]) {
+//   app.post(`/api/${action}`, (req, res) => {
+//     const s = req.deliveryState;
+
+//     if (!s.ready || s.loadingRoute) {
+//       return res.status(503).json({
+//         error: "Route is not ready",
+//       });
+//     }
+
+//     if (action === "start") {
+//       if (s.traveledMeters >= s.totalMeters) {
+//         s.traveledMeters = 0;
+//       }
+
+//       s.running = true;
+//     } else if (action === "pause") {
+//       s.running = false;
+//     } else {
+//       s.running = false;
+//       s.traveledMeters = 0;
+//     }
+
+//     const state = snapshot(s);
+
+//     emitSession(s, "location", state);
+
+//     return res.json(state);
+//   });
+// }
+
+// // Route creation for current visitor
+// app.post("/api/route", async (req, res) => {
+//   const s = req.deliveryState;
+
+//   const { source, destination } =
+//     req.body || {};
+
+//   if (!validCoords(source)) {
+//     return res.status(400).json({
+//       error:
+//         "Expected source [latitude, longitude]",
+//     });
+//   }
+
+//   if (!validCoords(destination)) {
+//     return res.status(400).json({
+//       error:
+//         "Expected destination [latitude, longitude]",
+//     });
+//   }
+
+//   if (s.loadingRoute) {
+//     return res.status(409).json({
+//       error:
+//         "Route calculation already in progress",
+//     });
+//   }
+
+//   try {
+//     s.running = false;
+
+//     await loadRoadRoute(
+//       s,
+//       source,
+//       destination
+//     );
+
+//     return res.json(snapshot(s));
+//   } catch (error) {
+//     return res.status(502).json({
+//       error: error.message,
+//     });
+//   }
+// });
+
+// // Move each active delivery independently.
+// setInterval(() => {
+//   const now = Date.now();
+
+//   for (const [id, s] of sessions) {
+//     if (
+//       now - s.lastSeen > SESSION_TTL_MS &&
+//       !s.loadingRoute
+//     ) {
+//       sessions.delete(id);
+//       continue;
+//     }
+
+//     if (
+//       !s.running ||
+//       !s.ready ||
+//       s.loadingRoute
+//     ) {
+//       continue;
+//     }
+
+//     s.traveledMeters = Math.min(
+//       s.totalMeters,
+//       s.traveledMeters + METERS_PER_TICK
+//     );
+
+//     if (s.traveledMeters >= s.totalMeters) {
+//       s.running = false;
+//     }
+
+//     emitSession(s, "location");
+//   }
+// }, TICK_MS);
+
+// // Persistent Node.js hosting
+// if (!process.env.VERCEL) {
+//   server.listen(PORT, () => {
+//     console.log(
+//       `Delivery tracker: http://localhost:${PORT}`
+//     );
+//   });
+// }
+
+// export default server;
 
