@@ -3810,32 +3810,36 @@ map.addLayer({
 
 </div>
 
+
 <script>
 "use strict";
 
-// ======================================
-// MAPBOX TOKEN
-// ======================================
+// ==========================================
+// 1. MAPBOX SETTINGS
+// ==========================================
 
-// Use your PUBLIC token beginning with pk.
-mapboxgl.accessToken =
-  "pk.eyJ1Ijoic2h1dm84MTU0IiwiYSI6ImNtdm52MHl6dDBpdDYzNXF4aWJlMTlha2YifQ.z1NPpmqnSb6TV4cYSNaqtA";
-
-// ======================================
-// SETTINGS
-// ======================================
+// Paste your existing PUBLIC Mapbox token (pk...)
+mapboxgl.accessToken = "pk.eyJ1Ijoic2h1dm84MTU0IiwiYSI6ImNtdm52MHl6dDBpdDYzNXF4aWJlMTlha2YifQ.z1NPpmqnSb6TV4cYSNaqtA";
 
 const DEFAULT_CENTER = [90.4125, 23.8103];
 
-// Used for ETA only, not simulated movement.
 const AVERAGE_SPEED_KMH = 24;
 
-// ======================================
-// PRIVATE BROWSER STATE
-// ======================================
+// Maximum distance from selected point
+// to a routable road.
+const SNAP_RADIUS = 500 ;
 
-let currentPosition = null; // [longitude, latitude]
+// Draw dashed connector if gap >= 8m.
+const CONNECTOR_MIN_METERS = 8;
+
+// ==========================================
+// 2. BROWSER STATE
+// ==========================================
+
+let currentPosition = null;
 let destination = null;
+let routeExactSource = null;
+
 let routeCoordinates = [];
 let routeSteps = [];
 
@@ -3843,22 +3847,27 @@ let routeMeters = 0;
 let remainingMeters = 0;
 let traveledMeters = 0;
 
-let watchId = null;
-let tracking = false;
+let completedSegment = 0;
+let completedFraction = 0;
 
 let userMarker = null;
 let destinationMarker = null;
 
-// ======================================
-// HTML HELPERS
-// ======================================
+let watchId = null;
+let tracking = false;
+
+let routeRequestNumber = 0;
+let routeDuration = 0;
 
 const $ = (id) => document.getElementById(id);
 
+// ==========================================
+// 3. HELPER FUNCTIONS
+// ==========================================
+
 function setStatus(message, type = "") {
-  const element = $("status");
-  element.textContent = message;
-  element.className = "status " + type;
+  $("status").textContent = message;
+  $("status").className = "status " + type;
 }
 
 function formatDistance(meters) {
@@ -3876,14 +3885,14 @@ function formatETA(seconds) {
 
   const minutes = Math.ceil(seconds / 60);
 
-  if (minutes < 60) {
-    return minutes + " min";
-  }
+  if (minutes < 60) return minutes + " min";
 
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-
-  return hours + "h " + rest + "m";
+  return (
+    Math.floor(minutes / 60) +
+    "h " +
+    (minutes % 60) +
+    "m"
+  );
 }
 
 function validCoordinatePair(coords) {
@@ -3898,19 +3907,57 @@ function validCoordinatePair(coords) {
   );
 }
 
-// ======================================
-// MAP INITIALIZATION
-// ======================================
+function distanceBetween(a, b) {
+  const rad = Math.PI / 180;
+
+  const lat1 = a[1] * rad;
+  const lat2 = b[1] * rad;
+
+  const dLat = (b[1] - a[1]) * rad;
+  const dLon = (b[0] - a[0]) * rad;
+
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) *
+    Math.cos(lat2) *
+    Math.sin(dLon / 2) ** 2;
+
+  return (
+    6371000 * 2 *
+    Math.atan2(
+      Math.sqrt(h),
+      Math.sqrt(Math.max(0, 1 - h))
+    )
+  );
+}
+
+function lineData(coordinates) {
+  return {
+    type: "Feature",
+    properties: {},
+    geometry: {
+      type: "LineString",
+      coordinates
+    }
+  };
+}
+
+function emptyCollection() {
+  return {
+    type: "FeatureCollection",
+    features: []
+  };
+}
+
+// ==========================================
+// 4. INITIALIZE MAPBOX
+// ==========================================
 
 const map = new mapboxgl.Map({
   container: "map",
-
   style: "mapbox://styles/mapbox/standard",
-
   center: DEFAULT_CENTER,
-
   zoom: 12,
-
   attributionControl: true
 });
 
@@ -3919,26 +3966,62 @@ map.addControl(
   "bottom-right"
 );
 
-// GeoJSON line features
-function lineData(coordinates) {
-  return {
-    type: "Feature",
-    geometry: {
-      type: "LineString",
-      coordinates
-    },
-    properties: {}
-  };
+// ==========================================
+// 5. CREATE CURVED DASHED CONNECTOR
+// ==========================================
+
+function createCurvedLine(start, end) {
+  const middleLng = (start[0] + end[0]) / 2;
+  const middleLat = (start[1] + end[1]) / 2;
+
+  const scale = Math.max(
+    0.1,
+    Math.cos(middleLat * Math.PI / 180)
+  );
+
+  const dx = (end[0] - start[0]) * scale;
+  const dy = end[1] - start[1];
+
+  const bend = 0.16;
+
+  const controlLng =
+    middleLng - (dy * bend / scale);
+
+  const controlLat =
+    middleLat + dx * bend;
+
+  const points = [];
+
+  for (let i = 0; i <= 50; i++) {
+    const t = i / 50;
+    const u = 1 - t;
+
+    const lng =
+      u * u * start[0] +
+      2 * u * t * controlLng +
+      t * t * end[0];
+
+    const lat =
+      u * u * start[1] +
+      2 * u * t * controlLat +
+      t * t * end[1];
+
+    points.push([lng, lat]);
+  }
+
+  return points;
 }
 
-const emptyLine = lineData([]);
+// ==========================================
+// 6. ADD MAPBOX LAYERS
+// ==========================================
 
 map.on("load", () => {
 
-  // Full road route
+  // Main road route
   map.addSource("route", {
     type: "geojson",
-    data: emptyLine
+    data: lineData([])
   });
 
   map.addLayer({
@@ -3952,16 +4035,16 @@ map.on("load", () => {
     },
 
     paint: {
-      "line-color": "#35a8ff",
+      "line-color": "#0079FF",
       "line-width": 7,
       "line-opacity": 0.95
     }
   });
 
-  // Completed route
+  // Completed road path
   map.addSource("completed-route", {
     type: "geojson",
-    data: emptyLine
+    data: lineData([])
   });
 
   map.addLayer({
@@ -3975,26 +4058,96 @@ map.on("load", () => {
     },
 
     paint: {
-      "line-color": "#111827",
+      "line-color": "#202734",
       "line-width": 7
     }
   });
 
-  updateMapRoutes();
+  // Dashed road-to-marker connections
+  map.addSource("connection-lines", {
+    type: "geojson",
+    data: emptyCollection()
+  });
 
+  map.addLayer({
+    id: "connection-lines-layer",
+    type: "line",
+    source: "connection-lines",
+
+    layout: {
+      "line-cap": "butt",
+      "line-join": "round"
+    },
+
+    paint: {
+      "line-color": "#0079FF",
+      "line-width": 6,
+      "line-dasharray": [1.5, 1.8],
+      "line-opacity": 0.95
+    }
+  });
+
+  updateMapRoutes();
   getCurrentLocation();
 });
 
-// ======================================
-// MAP DRAWING
-// ======================================
+// ==========================================
+// 7. UPDATE DASHED CONNECTIONS
+// ==========================================
+
+function updateConnectionLines() {
+  const source = map.getSource("connection-lines");
+
+  if (!source) return;
+
+  const features = [];
+
+  if (routeCoordinates.length >= 2) {
+
+    const roadStart = routeCoordinates[0];
+    const roadEnd = routeCoordinates.at(-1);
+
+    function addConnector(from, to) {
+      if (!from || !to) return;
+
+      const gap = distanceBetween(from, to);
+
+      if (gap < CONNECTOR_MIN_METERS) return;
+
+      features.push({
+        type: "Feature",
+        properties: {
+          gapMeters: gap
+        },
+        geometry: {
+          type: "LineString",
+          coordinates: createCurvedLine(from, to)
+        }
+      });
+    }
+
+    // Original GPS point -> road start
+    addConnector(routeExactSource, roadStart);
+
+    // Road end -> destination pin
+    addConnector(roadEnd, destination);
+  }
+
+  source.setData({
+    type: "FeatureCollection",
+    features
+  });
+}
+
+// ==========================================
+// 8. UPDATE MAP ROUTES
+// ==========================================
 
 function updateMapRoutes() {
+  const roadSource = map.getSource("route");
 
-  const routeSource = map.getSource("route");
-
-  if (routeSource) {
-    routeSource.setData(
+  if (roadSource) {
+    roadSource.setData(
       lineData(routeCoordinates)
     );
   }
@@ -4007,29 +4160,29 @@ function updateMapRoutes() {
       lineData(getCompletedPath())
     );
   }
+
+  updateConnectionLines();
 }
 
-function updateUserMarker() {
+// ==========================================
+// 9. MAP MARKERS
+// ==========================================
 
+function updateUserMarker() {
   if (!currentPosition) return;
 
   if (!userMarker) {
-
     userMarker = new mapboxgl.Marker({
       color: "#1685f8"
     })
       .setLngLat(currentPosition)
       .addTo(map);
-
   } else {
-
     userMarker.setLngLat(currentPosition);
-
   }
 }
 
 function updateDestinationMarker() {
-
   if (destinationMarker) {
     destinationMarker.remove();
     destinationMarker = null;
@@ -4045,7 +4198,6 @@ function updateDestinationMarker() {
 }
 
 function centerOnUser() {
-
   if (!currentPosition) {
     getCurrentLocation();
     return;
@@ -4059,7 +4211,6 @@ function centerOnUser() {
 }
 
 function fitRoute() {
-
   if (routeCoordinates.length < 2) {
     centerOnUser();
     return;
@@ -4067,8 +4218,16 @@ function fitRoute() {
 
   const bounds = new mapboxgl.LngLatBounds();
 
-  for (const point of routeCoordinates) {
+  routeCoordinates.forEach(point => {
     bounds.extend(point);
+  });
+
+  if (routeExactSource) {
+    bounds.extend(routeExactSource);
+  }
+
+  if (destination) {
+    bounds.extend(destination);
   }
 
   map.fitBounds(bounds, {
@@ -4078,29 +4237,27 @@ function fitRoute() {
   });
 }
 
-// ======================================
-// GPS LOCATION
-// ======================================
+// ==========================================
+// 10. GPS LOCATION
+// ==========================================
 
 function gpsErrorMessage(error) {
-
   if (error.code === 1) {
-    return "Location permission denied. Allow location access.";
+    return "Location permission denied.";
   }
 
   if (error.code === 2) {
-    return "GPS position unavailable. Try again.";
+    return "GPS location unavailable.";
   }
 
   if (error.code === 3) {
     return "Location request timed out.";
   }
 
-  return error.message || "Unable to get location.";
+  return error.message || "GPS error.";
 }
 
 function handlePosition(position) {
-
   const latitude = position.coords.latitude;
   const longitude = position.coords.longitude;
 
@@ -4120,41 +4277,33 @@ function handlePosition(position) {
     updateProgress();
   }
 
-  if (tracking) {
-
-    setStatus("Live GPS tracking active", "success");
-
-  } else {
-
-    setStatus("Current location detected", "success");
-
-  }
+  setStatus(
+    tracking
+      ? "Live GPS tracking active"
+      : "Current location detected",
+    "success"
+  );
 }
 
 function getCurrentLocation() {
-
   if (!navigator.geolocation) {
-
     setStatus(
-      "Your browser does not support geolocation.",
+      "Geolocation not supported.",
       "error"
     );
-
     return;
   }
 
-  setStatus("Detecting your current location...");
+  setStatus("Finding your location...");
 
   navigator.geolocation.getCurrentPosition(
     (position) => {
-
       handlePosition(position);
 
       map.flyTo({
         center: currentPosition,
         zoom: 15
       });
-
     },
 
     (error) => {
@@ -4172,48 +4321,41 @@ function getCurrentLocation() {
   );
 }
 
-// ======================================
-// LIVE GPS TRACKING
-// ======================================
+// ==========================================
+// 11. START GPS TRACKING
+// ==========================================
 
 function startTracking() {
-
   if (tracking) return;
 
   if (!navigator.geolocation) {
-    setStatus("GPS is not available.", "error");
+    setStatus("GPS unavailable.", "error");
     return;
   }
 
-  // This only affects THIS browser.
   tracking = true;
 
   $("startBtn").disabled = true;
   $("stopBtn").disabled = false;
 
-  setStatus("Starting live GPS tracking...");
+  setStatus("Starting GPS tracking...");
 
   watchId = navigator.geolocation.watchPosition(
-
     (position) => {
-
       handlePosition(position);
 
       map.easeTo({
         center: currentPosition,
         duration: 600
       });
-
     },
 
     (error) => {
-
       setStatus(
         gpsErrorMessage(error),
         "error"
       );
 
-      // Permission denied: stop tracking.
       if (error.code === 1) {
         stopTracking();
       }
@@ -4228,7 +4370,6 @@ function startTracking() {
 }
 
 function stopTracking() {
-
   if (watchId !== null) {
     navigator.geolocation.clearWatch(watchId);
     watchId = null;
@@ -4242,16 +4383,20 @@ function stopTracking() {
   setStatus("GPS tracking stopped.");
 }
 
-// ======================================
-// DESTINATION SELECTION
-// ======================================
+// ==========================================
+// 12. DESTINATION SELECTION
+// ==========================================
 
 function setDestination(coords) {
-
   if (!validCoordinatePair(coords)) {
-    setStatus("Invalid destination coordinates.", "error");
+    setStatus(
+      "Invalid destination coordinates.",
+      "error"
+    );
     return;
   }
+
+  ++routeRequestNumber;
 
   destination = [...coords];
 
@@ -4262,134 +4407,191 @@ function setDestination(coords) {
 
   updateDestinationMarker();
 
-  setStatus(
-    "Destination selected. Calculating route..."
-  );
-
   if (currentPosition) {
     calculateRoute();
   } else {
+    clearRouteData();
     setStatus(
-      "Destination selected. Get your current location to calculate a route."
+      "Get your current location first."
     );
   }
 }
 
-// Click map to choose destination
 map.on("click", (event) => {
-
-  const coords = [
+  setDestination([
     event.lngLat.lng,
     event.lngLat.lat
-  ];
-
-  setDestination(coords);
+  ]);
 });
 
 function readDestinationInput() {
+  const value = $("destinationInput").value.trim();
 
-  const parts = $("destinationInput")
-    .value
-    .trim()
+  if (!value) return null;
+
+  const parts = value
     .split(",")
-    .map(value => Number(value.trim()));
+    .map(item => Number(item.trim()));
 
-  if (parts.length !== 2) {
-    return null;
-  }
+  if (parts.length !== 2) return null;
 
-  // User input is Latitude, Longitude.
-  const latitude = parts[0];
-  const longitude = parts[1];
-
-  const coords = [longitude, latitude];
+  const coords = [
+    parts[1],
+    parts[0]
+  ];
 
   return validCoordinatePair(coords)
     ? coords
     : null;
 }
 
-// ======================================
-// OSRM ROUTE CALCULATION
-// ======================================
+// ==========================================
+// 13. CLEAR PREVIOUS ROUTE
+// ==========================================
 
-let routeRequestNumber = 0;
+function clearRouteData() {
+  routeCoordinates = [];
+  routeSteps = [];
+
+  routeExactSource = null;
+
+  routeMeters = 0;
+  remainingMeters = 0;
+  traveledMeters = 0;
+  routeDuration = 0;
+
+  completedSegment = 0;
+  completedFraction = 0;
+
+  updateMapRoutes();
+
+  $("totalDistance").textContent = "--";
+  $("remainingDistance").textContent = "--";
+  $("eta").textContent = "--";
+
+  $("progressFill").style.width = "0%";
+  $("progressText").textContent = "No route selected";
+  $("nextStep").textContent =
+    "Select a destination to see directions.";
+}
+
+// ==========================================
+// 14. OSRM ROUTE CALCULATION
+// ==========================================
 
 async function calculateRoute() {
-
   if (!currentPosition || !destination) {
-
-    setStatus(
-      "Current location and destination are required.",
-      "error"
-    );
-
+    setStatus("Select your location and destination.", "error");
     return;
   }
 
   const requestNumber = ++routeRequestNumber;
-
   const source = [...currentPosition];
   const target = [...destination];
 
-  setStatus("Finding road route...");
+  clearRouteData();
+  setStatus("Finding a drivable route...");
 
-  try {
+  const base = "https://router.project-osrm.org";
 
-    // OSRM expects longitude, latitude.
-    const coordinates =
-      `${source[0]},${source[1]};` +
-      `${target[0]},${target[1]}`;
+  async function requestOSRM(url) {
+    const response = await fetch(url);
+    const data = await response.json();
 
+    if (!response.ok || data.code !== "Ok") {
+      throw new Error(data.message || data.code || "OSRM error");
+    }
+
+    return data;
+  }
+
+  async function nearestRoad(point) {
     const url =
-      "https://router.project-osrm.org/route/v1/driving/" +
-      coordinates +
+      `${base}/nearest/v1/driving/` +
+      `${point[0]},${point[1]}?number=1`;
+
+    const data = await requestOSRM(url);
+
+    const waypoint = data.waypoints?.[0];
+
+    if (!waypoint?.location) {
+      throw new Error("No routable road found.");
+    }
+
+    return waypoint;
+  }
+
+  async function getRoute(start, end) {
+    const url =
+      `${base}/route/v1/driving/` +
+      `${start[0]},${start[1]};` +
+      `${end[0]},${end[1]}` +
       "?overview=full" +
       "&geometries=geojson" +
       "&steps=true";
 
-    const response = await fetch(url);
+    return requestOSRM(url);
+  }
 
-    if (!response.ok) {
-      throw new Error(
-        "Routing service returned HTTP " +
-        response.status
+  try {
+    let data;
+    let usedFallback = false;
+
+    try {
+      // First: normal road routing.
+      data = await getRoute(source, target);
+    } catch (initialError) {
+      // Second: explicitly locate road-network points.
+      const [startRoad, endRoad] = await Promise.all([
+        nearestRoad(source),
+        nearestRoad(target)
+      ]);
+
+      if (requestNumber !== routeRequestNumber) return;
+
+      // Limit how far away the selected road can be.
+      const MAX_ACCESS_GAP = 1000;
+
+      if (
+        startRoad.distance > MAX_ACCESS_GAP ||
+        endRoad.distance > MAX_ACCESS_GAP
+      ) {
+        throw new Error(
+          "No suitable driving road near the selected location."
+        );
+      }
+
+      data = await getRoute(
+        startRoad.location,
+        endRoad.location
       );
+
+      usedFallback = true;
     }
 
-    const data = await response.json();
+    if (requestNumber !== routeRequestNumber) return;
 
-    // Discard outdated route responses.
-    if (requestNumber !== routeRequestNumber) {
-      return;
+    const trip = data.routes?.[0];
+
+    if (!trip?.geometry?.coordinates?.length) {
+      throw new Error("No connected driving route found.");
     }
 
-    if (
-      data.code !== "Ok" ||
-      !data.routes ||
-      !data.routes.length
-    ) {
-      throw new Error(
-        data.message || "No road route found."
-      );
-    }
-
-    const trip = data.routes[0];
-
-    routeCoordinates =
-      trip.geometry.coordinates;
+    routeCoordinates = trip.geometry.coordinates;
+    routeExactSource = source;
 
     routeMeters = trip.distance;
-
     remainingMeters = routeMeters;
     traveledMeters = 0;
+    routeDuration = trip.duration;
+
+    completedSegment = 0;
+    completedFraction = 0;
 
     routeSteps = [];
 
     for (const leg of trip.legs || []) {
-
       for (const step of leg.steps || []) {
-
         routeSteps.push({
           location: step.maneuver.location,
           text: instructionText(
@@ -4397,7 +4599,6 @@ async function calculateRoute() {
             step.name
           )
         });
-
       }
     }
 
@@ -4406,38 +4607,50 @@ async function calculateRoute() {
     updateProgress();
     fitRoute();
 
-    setStatus(
-      "Route calculated successfully.",
-      "success"
+    const endGap = distanceBetween(
+      routeCoordinates.at(-1),
+      target
     );
 
-  } catch (error) {
-
-    if (requestNumber !== routeRequestNumber) {
-      return;
+    if (usedFallback || endGap >= CONNECTOR_MIN_METERS) {
+      setStatus(
+        "Road route found. The dashed line is only a visual " +
+        "connection to your exact destination.",
+        "success"
+      );
+    } else {
+      setStatus("Road route calculated.", "success");
     }
 
-    setStatus(error.message, "error");
+  } catch (error) {
+    if (requestNumber !== routeRequestNumber) return;
+
+    clearRouteData();
+
+    // Keep the red destination marker visible.
+    setStatus(
+      "Destination selected, but a drivable route " +
+      "could not be found.",
+      "error"
+    );
+
+    console.error("OSRM:", error.message);
   }
 }
 
-// ======================================
-// NAVIGATION INSTRUCTIONS
-// ======================================
+// ==========================================
+// 15. NAVIGATION INSTRUCTIONS
+// ==========================================
 
 function instructionText(maneuver, name) {
-
-  const road = name
-    ? " onto " + name
-    : "";
+  const road = name ? " onto " + name : "";
 
   switch (maneuver.type) {
-
     case "depart":
       return "Start your journey";
 
     case "arrive":
-      return "You have arrived at your destination";
+      return "Arrive at your destination";
 
     case "turn":
       return (
@@ -4473,43 +4686,11 @@ function instructionText(maneuver, name) {
   }
 }
 
-// ======================================
-// DISTANCE HELPERS
-// ======================================
-
-function distanceBetween(a, b) {
-
-  // Coordinates: [longitude, latitude]
-  const rad = Math.PI / 180;
-
-  const lat1 = a[1] * rad;
-  const lat2 = b[1] * rad;
-
-  const deltaLat = (b[1] - a[1]) * rad;
-  const deltaLon = (b[0] - a[0]) * rad;
-
-  const h =
-    Math.sin(deltaLat / 2) ** 2 +
-    Math.cos(lat1) *
-      Math.cos(lat2) *
-      Math.sin(deltaLon / 2) ** 2;
-
-  return (
-    6371000 *
-    2 *
-    Math.atan2(
-      Math.sqrt(h),
-      Math.sqrt(Math.max(0, 1 - h))
-    )
-  );
-}
-
-// ======================================
-// NEAREST POINT ON THE ROAD
-// ======================================
+// ==========================================
+// 16. NEAREST ROAD POSITION
+// ==========================================
 
 function nearestRoutePosition(position) {
-
   if (routeCoordinates.length < 2) {
     return null;
   }
@@ -4526,7 +4707,6 @@ function nearestRoutePosition(position) {
   let bestDistanceAlong = 0;
   let bestSegment = 0;
   let bestFraction = 0;
-
   let accumulated = 0;
 
   for (
@@ -4534,7 +4714,6 @@ function nearestRoutePosition(position) {
     i < routeCoordinates.length - 1;
     i++
   ) {
-
     const a = routeCoordinates[i];
     const b = routeCoordinates[i + 1];
 
@@ -4554,7 +4733,8 @@ function nearestRoutePosition(position) {
           0,
           Math.min(
             1,
-            -(ax * dx + ay * dy) / lengthSquared
+            -(ax * dx + ay * dy) /
+            lengthSquared
           )
         )
       : 0;
@@ -4567,8 +4747,8 @@ function nearestRoutePosition(position) {
     const segmentMeters = distanceBetween(a, b);
 
     if (offRoad < bestDistance) {
-
       bestDistance = offRoad;
+
       bestDistanceAlong =
         accumulated + segmentMeters * t;
 
@@ -4588,15 +4768,11 @@ function nearestRoutePosition(position) {
   };
 }
 
-// ======================================
-// COMPLETED ROUTE
-// ======================================
-
-let completedSegment = 0;
-let completedFraction = 0;
+// ==========================================
+// 17. COMPLETED ROAD PATH
+// ==========================================
 
 function getCompletedPath() {
-
   if (routeCoordinates.length < 2) {
     return [];
   }
@@ -4610,7 +4786,6 @@ function getCompletedPath() {
   const b = routeCoordinates[completedSegment + 1];
 
   if (a && b) {
-
     path.push([
       a[0] + (b[0] - a[0]) * completedFraction,
       a[1] + (b[1] - a[1]) * completedFraction
@@ -4620,13 +4795,16 @@ function getCompletedPath() {
   return path;
 }
 
-// ======================================
-// UPDATE ROUTE PROGRESS USING REAL GPS
-// ======================================
+// ==========================================
+// 18. UPDATE GPS ROUTE PROGRESS
+// ==========================================
 
 function updateProgress() {
-
-  if (!currentPosition || !routeMeters) {
+  if (
+    !currentPosition ||
+    !destination ||
+    !routeMeters
+  ) {
     return;
   }
 
@@ -4636,19 +4814,17 @@ function updateProgress() {
 
   if (!nearest) return;
 
-  // If user moves far away from the selected
-  // road, do not treat it as completed progress.
   if (nearest.offRoad > 100) {
-
     $("nextStep").textContent =
-      "You are away from the planned route. " +
-      "Select Find Road Route to recalculate.";
+      "You are away from the planned road. " +
+      "Recalculate your route.";
 
     return;
   }
 
   const fraction = nearest.measuredTotal > 0
-    ? nearest.distanceAlong / nearest.measuredTotal
+    ? nearest.distanceAlong /
+      nearest.measuredTotal
     : 0;
 
   const progress = Math.max(
@@ -4657,6 +4833,7 @@ function updateProgress() {
   );
 
   traveledMeters = routeMeters * progress;
+
   remainingMeters = Math.max(
     0,
     routeMeters - traveledMeters
@@ -4675,7 +4852,6 @@ function updateProgress() {
     ) < 25;
 
   if (nearDestination) {
-
     $("nextStep").textContent =
       "You have arrived at your destination!";
 
@@ -4683,16 +4859,16 @@ function updateProgress() {
       "Destination reached!",
       "success"
     );
-
   } else {
-
     updateNextInstruction();
-
   }
 }
 
-function updateNextInstruction() {
+// ==========================================
+// 19. NEXT INSTRUCTION
+// ==========================================
 
+function updateNextInstruction() {
   if (!routeSteps.length || !currentPosition) {
     return;
   }
@@ -4701,53 +4877,50 @@ function updateNextInstruction() {
   let nearestDistance = Infinity;
 
   for (const step of routeSteps) {
+    if (!validCoordinatePair(step.location)) {
+      continue;
+    }
 
-    const stepCoords = step.location;
-
-    const distance = distanceBetween(
+    const d = distanceBetween(
       currentPosition,
-      stepCoords
+      step.location
     );
 
-    if (distance < nearestDistance) {
-
-      nearestDistance = distance;
+    if (d < nearestDistance) {
+      nearestDistance = d;
       nearestStep = step;
-
     }
   }
 
   if (nearestStep) {
-
     $("nextStep").textContent =
       nearestStep.text +
       " (" +
       formatDistance(nearestDistance) +
       " nearby)";
-
   }
 }
 
-// ======================================
-// STATS
-// ======================================
+// ==========================================
+// 20. UPDATE STATISTICS
+// ==========================================
 
 function updateStats() {
-
   $("totalDistance").textContent =
     formatDistance(routeMeters);
 
   $("remainingDistance").textContent =
     formatDistance(remainingMeters);
 
-  const etaSeconds =
-    remainingMeters /
-    (AVERAGE_SPEED_KMH * 1000 / 3600);
+  const etaSeconds = routeMeters > 0
+    ? routeDuration *
+      (remainingMeters / routeMeters)
+    : 0;
 
   $("eta").textContent =
     formatETA(etaSeconds);
 
-  const progress = routeMeters
+  const progress = routeMeters > 0
     ? Math.round(
         (traveledMeters / routeMeters) * 100
       )
@@ -4760,25 +4933,14 @@ function updateStats() {
     progress + "% of road route completed";
 }
 
-// ======================================
-// RESET
-// ======================================
+// ==========================================
+// 21. RESET ROUTE
+// ==========================================
 
 function resetRoute() {
-
   ++routeRequestNumber;
 
   destination = null;
-
-  routeCoordinates = [];
-  routeSteps = [];
-
-  routeMeters = 0;
-  remainingMeters = 0;
-  traveledMeters = 0;
-
-  completedSegment = 0;
-  completedFraction = 0;
 
   $("destinationInput").value = "";
 
@@ -4787,27 +4949,16 @@ function resetRoute() {
     destinationMarker = null;
   }
 
-  updateMapRoutes();
-
-  $("totalDistance").textContent = "--";
-  $("remainingDistance").textContent = "--";
-  $("eta").textContent = "--";
-
-  $("progressFill").style.width = "0%";
-  $("progressText").textContent =
-    "No route selected";
-
-  $("nextStep").textContent =
-    "Select a destination to see directions.";
+  clearRouteData();
 
   setStatus("Route reset successfully.");
 
   centerOnUser();
 }
 
-// ======================================
-// BUTTON EVENTS
-// ======================================
+// ==========================================
+// 22. BUTTON EVENTS
+// ==========================================
 
 $("locateBtn").addEventListener(
   "click",
@@ -4842,39 +4993,32 @@ $("resetBtn").addEventListener(
 $("routeBtn").addEventListener(
   "click",
   () => {
-
     const coords = readDestinationInput();
 
     if (coords) {
-
-      destination = coords;
-      updateDestinationMarker();
-      calculateRoute();
-
+      setDestination(coords);
     } else {
-
       setStatus(
-        "Enter a valid destination: latitude, longitude",
+        "Enter valid latitude, longitude.",
         "error"
       );
-
     }
   }
 );
 
-// ======================================
-// CLEANUP
-// ======================================
+// ==========================================
+// 23. CLEANUP
+// ==========================================
 
 window.addEventListener("pagehide", () => {
-
   if (watchId !== null) {
     navigator.geolocation.clearWatch(watchId);
+    watchId = null;
   }
-
 });
 
 </script>
+
 
 </body>
 </html>
