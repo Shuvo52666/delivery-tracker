@@ -3813,6 +3813,8 @@ map.addLayer({
 
 
 
+
+
 <script>
 "use strict";
 
@@ -3820,6 +3822,7 @@ map.addLayer({
 // 1. MAPBOX SETTINGS
 // ==========================================
 
+// Use your existing public Mapbox token here.
 mapboxgl.accessToken = "pk.eyJ1Ijoic2h1dm84MTU0IiwiYSI6ImNtdm52MHl6dDBpdDYzNXF4aWJlMTlha2YifQ.z1NPpmqnSb6TV4cYSNaqtA";
 
 const DEFAULT_CENTER = [90.4125, 23.8103];
@@ -3827,7 +3830,6 @@ const AVERAGE_SPEED_KMH = 24;
 const SNAP_RADIUS = 500;
 const CONNECTOR_MIN_METERS = 8;
 
-// GPS marker movement settings
 const MAX_GPS_ACCURACY = 60;
 const MAX_SNAP_DISTANCE = 40;
 const BACKWARD_TOLERANCE = 12;
@@ -4015,7 +4017,6 @@ function createCurvedLine(start, end) {
 // ==========================================
 
 map.on("load", () => {
-
   map.addSource("route", {
     type: "geojson",
     data: lineData([])
@@ -4104,7 +4105,9 @@ function updateConnectionLines() {
 
       features.push({
         type: "Feature",
-        properties: { gapMeters: gap },
+        properties: {
+          gapMeters: gap
+        },
         geometry: {
           type: "LineString",
           coordinates: createCurvedLine(from, to)
@@ -4130,9 +4133,7 @@ function updateMapRoutes() {
   const roadSource = map.getSource("route");
 
   if (roadSource) {
-    roadSource.setData(
-      lineData(routeCoordinates)
-    );
+    roadSource.setData(lineData(routeCoordinates));
   }
 
   const completedSource =
@@ -4201,7 +4202,6 @@ function snapPositionToRoute(gpsPosition, accuracy) {
 
   const a = routeCoordinates[nearest.segment];
   const b = routeCoordinates[nearest.segment + 1];
-
   const t = nearest.fraction;
 
   return [
@@ -4501,7 +4501,6 @@ function setDestination(coords) {
   }
 
   ++routeRequestNumber;
-
   destination = [...coords];
 
   $("destinationInput").value =
@@ -4593,12 +4592,10 @@ async function calculateRoute() {
   }
 
   const requestNumber = ++routeRequestNumber;
-
   const source = [...currentPosition];
   const target = [...destination];
 
   clearRouteData();
-
   setStatus("Finding a drivable route...");
 
   const base = "https://router.project-osrm.org";
@@ -4622,7 +4619,6 @@ async function calculateRoute() {
       `${point[0]},${point[1]}?number=1`;
 
     const data = await requestOSRM(url);
-
     const waypoint = data.waypoints?.[0];
 
     if (!waypoint?.location) {
@@ -4632,7 +4628,7 @@ async function calculateRoute() {
     return waypoint;
   }
 
-  // CHANGED: Request alternative road routes.
+  // Existing shortest-distance route selection
   async function getRoute(start, end) {
     const url =
       `${base}/route/v1/driving/` +
@@ -4675,10 +4671,6 @@ async function calculateRoute() {
         );
       }
 
-      // Keep fallback behavior from your code.
-      // The nearest points may still be on an
-      // unexpected road, especially in areas
-      // without connected driving-road data.
       data = await getRoute(
         startRoad.location,
         endRoad.location
@@ -4691,7 +4683,6 @@ async function calculateRoute() {
       return;
     }
 
-    // CHANGED: Choose shortest available route.
     const validRoutes = (data.routes || [])
       .filter(route =>
         route.geometry?.coordinates?.length >= 2 &&
@@ -4730,7 +4721,6 @@ async function calculateRoute() {
     completedFraction = 0;
 
     resetMarkerSnapping();
-
     routeSteps = [];
 
     for (const leg of trip.legs || []) {
@@ -4842,9 +4832,7 @@ function instructionText(maneuver, name) {
 // ==========================================
 
 function nearestRoutePosition(position) {
-  if (routeCoordinates.length < 2) {
-    return null;
-  }
+  if (routeCoordinates.length < 2) return null;
 
   const referenceLatitude =
     position[1] * Math.PI / 180;
@@ -4876,7 +4864,6 @@ function nearestRoutePosition(position) {
 
     const dx = bx - ax;
     const dy = by - ay;
-
     const lengthSquared = dx * dx + dy * dy;
 
     const t = lengthSquared > 0
@@ -4945,7 +4932,7 @@ function getCompletedPath() {
 }
 
 // ==========================================
-// 21. UPDATE GPS ROUTE PROGRESS
+// 21. GPS ROUTE PROGRESS
 // ==========================================
 
 function updateProgress() {
@@ -4971,8 +4958,7 @@ function updateProgress() {
   }
 
   const fraction = nearest.measuredTotal > 0
-    ? nearest.distanceAlong /
-      nearest.measuredTotal
+    ? nearest.distanceAlong / nearest.measuredTotal
     : 0;
 
   const progress = Math.max(
@@ -5074,8 +5060,7 @@ function updateStats() {
       )
     : 0;
 
-  $("progressFill").style.width =
-    progress + "%";
+  $("progressFill").style.width = progress + "%";
 
   $("progressText").textContent =
     progress + "% of road route completed";
@@ -5089,7 +5074,6 @@ function resetRoute() {
   ++routeRequestNumber;
 
   destination = null;
-
   $("destinationInput").value = "";
 
   if (destinationMarker) {
@@ -5098,6 +5082,7 @@ function resetRoute() {
   }
 
   clearRouteData();
+
   setStatus("Route reset successfully.");
   centerOnUser();
 }
@@ -5168,7 +5153,157 @@ window.addEventListener("pagehide", () => {
   }
 });
 
+
+ // ==========================================
+ // 27. SMART LOCAL BUSINESS LABELS AND DOTS
+ // ==========================================
+
+ map.on("load", () => {
+   const sourceId = "local-business-pois";
+   const layerId = "local-business-labels";
+
+   // Use the same POI data you already have.
+   if (!map.getSource(sourceId)) {
+     map.addSource(sourceId, {
+       type: "vector",
+       url:
+         "mapbox://mapbox-geodata.poi_production_exported_standard"
+     });
+   }
+
+   // Create a blue dot with a white border.
+   // This becomes an icon so Mapbox can perform
+   // collision detection for dots and names.
+   const dotSize = 32;
+   const canvas = document.createElement("canvas");
+   canvas.width = dotSize;
+   canvas.height = dotSize;
+
+   const ctx = canvas.getContext("2d");
+
+   ctx.beginPath();
+   ctx.arc(16, 16, 11, 0, Math.PI * 2);
+   ctx.fillStyle = "#668BC3";
+   ctx.fill();
+
+   ctx.lineWidth = 3;
+   ctx.strokeStyle = "#FFFFFF";
+   ctx.stroke();
+
+   if (!map.hasImage("local-shop-dot")) {
+     map.addImage(
+       "local-shop-dot",
+       ctx.getImageData(0, 0, dotSize, dotSize),
+       { pixelRatio: 2 }
+     );
+   }
+
+   if (!map.getLayer(layerId)) {
+     map.addLayer({
+       id: layerId,
+       type: "symbol",
+       source: sourceId,
+
+       "source-layer":
+         "poi_production_exported_standard",
+
+       slot: "top",
+       minzoom: 14,
+
+       filter: ["has", "name"],
+
+       layout: {
+         "symbol-placement": "point",
+
+         // Dots appear only when zoomed in.
+         "icon-image": [
+           "step",
+           ["zoom"],
+           "",
+           17,
+           "local-shop-dot"
+         ],
+
+         "icon-size": [
+           "interpolate",
+           ["linear"],
+           ["zoom"],
+           17, 0.65,
+           19, 0.9,
+           21, 1.1
+         ],
+
+         "icon-anchor": "center",
+
+         // Never force dots to overlap.
+         "icon-allow-overlap": false,
+         "icon-ignore-placement": false,
+
+         "icon-padding": 3,
+
+         // Shop names.
+         "text-field": [
+           "coalesce",
+           ["get", "name"],
+           ""
+         ],
+
+         "text-size": [
+           "interpolate",
+           ["linear"],
+           ["zoom"],
+           14, 10,
+           17, 12,
+           20, 14
+         ],
+
+         "text-font": [
+           "Open Sans Regular",
+           "Arial Unicode MS Regular"
+         ],
+
+         "text-anchor": "top",
+         "text-offset": [0, 0.85],
+         "text-max-width": 11,
+
+         // Never force shop names to overlap.
+         "text-allow-overlap": false,
+         "text-ignore-placement": false,
+
+         "text-padding": [
+           "interpolate",
+           ["linear"],
+           ["zoom"],
+           14, 12,
+           18, 5,
+           21, 2
+         ],
+
+         // Dot and label stay together.
+         "icon-optional": false,
+         "text-optional": false,
+
+         "symbol-sort-key": [
+           "case",
+           ["has", "name"],
+           1,
+           2
+         ]
+       },
+
+       paint: {
+         "text-color": "#5D87C1",
+         "text-halo-color": "#FFFFFF",
+         "text-halo-width": 1.5
+       }
+     });
+   }
+ });
+
+
 </script>
+
+
 
 
 
